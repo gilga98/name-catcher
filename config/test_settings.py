@@ -12,6 +12,7 @@ from huey import MemoryHuey  # noqa: E402
 
 from .settings import *  # noqa: E402, F403
 
+WHITENOISE_USE_FINDERS = True
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 EMAIL_DELIVERY_BACKEND = "django.core.mail.backends.locmem.EmailBackend"

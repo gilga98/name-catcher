@@ -37,3 +37,17 @@ def test_only_a_missing_static_file_is_kept_out_of_caches(client):
     assert missing.status_code == 404
     assert missing["Cache-Control"] == "no-store"
     assert "Cache-Control" not in client.get("/no-such-page")
+
+
+@pytest.mark.django_db
+def test_a_missed_hashed_asset_falls_back_to_unhashed(client):
+    fallback = client.get("/static/names/app.000000000000.css")
+    assert fallback.status_code == 200
+    assert fallback["Cache-Control"] == "no-cache"
+
+
+@pytest.mark.django_db
+def test_a_truly_missing_hashed_asset_is_kept_out_of_caches(client):
+    missing = client.get("/static/names/nonexistent.000000000000.css")
+    assert missing.status_code == 404
+    assert missing["Cache-Control"] == "no-store"

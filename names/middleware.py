@@ -1,3 +1,5 @@
+import copy
+import re
 from functools import lru_cache
 from urllib.parse import urlencode
 
@@ -50,8 +52,15 @@ class CloudflareAccessMiddleware:
         return self.get_response(request)
 
 
+_HASHED_STATIC = re.compile(r"\.[0-9a-f]{12}(\.[^.]+)$")
+
+
 class UncachedStaticMissMiddleware:
-    """During a deploy the old container can 404 a new asset. Stored by Cloudflare or a browser, that breaks the page for hours."""
+    """During a deploy an old or new container can miss a hashed asset.
+
+    If an unhashed version exists, serve it with no-cache so the page renders.
+    A genuinely missing file is kept out of caches with no-store.
+    """
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -59,6 +68,17 @@ class UncachedStaticMissMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         if response.status_code == 404 and request.path.startswith(settings.STATIC_URL):
+            unhashed = _HASHED_STATIC.sub(r"\1", request.path_info)
+            if unhashed != request.path_info:
+                fallback_req = copy.copy(request)
+                fallback_req.environ = copy.copy(request.environ)
+                fallback_req.environ["PATH_INFO"] = unhashed
+                fallback_req.path_info = unhashed
+                fallback_req.path = _HASHED_STATIC.sub(r"\1", request.path)
+                fallback_res = self.get_response(fallback_req)
+                if fallback_res.status_code == 200:
+                    fallback_res["Cache-Control"] = "no-cache"
+                    return fallback_res
             response["Cache-Control"] = "no-store"
         return response
 
