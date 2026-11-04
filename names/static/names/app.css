@@ -152,11 +152,18 @@ h1, h2, h3, .name { font-family: var(--serif); font-weight: 400; color: var(--in
 .name-card:nth-child(3) { z-index: 1; transform: translateY(1.75rem) scale(.94); background: var(--petal); }
 .name-card:nth-child(n+2) > * { visibility: hidden; }
 .name-card:nth-child(n+4) { display: none; }
+/* The next card shows as soon as the top one starts moving, so there's never a blank card while the server answers. */
+.name-card.dragging + .name-card, .name-card.fly-left + .name-card, .name-card.fly-right + .name-card { transform: none; background: var(--oat); }
+.name-card.dragging + .name-card > *, .name-card.fly-left + .name-card > *, .name-card.fly-right + .name-card > * { visibility: visible; }
 .name-card.fly-right { transform: translateX(120%) rotate(12deg); opacity: 0; }
 .name-card.fly-left { transform: translateX(-120%) rotate(-12deg); opacity: 0; }
 .stamp { position: absolute; top: 1.25rem; padding: .125rem .75rem; border: 2px solid; border-radius: .5rem; font-weight: 700; pointer-events: none; opacity: 0; }
 .stamp-keep { right: 1.25rem; color: var(--keep-ink); opacity: var(--keep, 0); }
 .stamp-pass { left: 1.25rem; color: var(--z-danger-f); opacity: var(--pass, 0); }
+.partner-note { margin: 0 0 .5rem; font-size: .9375rem; font-weight: 600; color: var(--mauve); }
+.partner-note:empty { display: none; }
+.partner-note.did-keep { color: var(--keep-ink); }
+.partner-note.did-pass { color: var(--z-danger-f); }
 .card-actions { display: grid; grid-template-columns: 1fr 1fr; }
 .card-actions .more { grid-column: 1 / -1; }
 .deck-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }

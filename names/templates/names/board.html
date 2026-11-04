@@ -29,12 +29,12 @@
     <h2 id="deck-title">Names for {{ baby }} to try on</h2>
     <button class="z-button z-button-text z-button-small" type="button" id="undo-swipe" hidden>Undo</button>
   </div>
-  <p class="hint deck-hint">Swipe right to keep, left to pass, or use the buttons or arrow keys. Your partner can't see your choices until they've made theirs. A name is only binned if you both pass.</p>
+  <p class="hint deck-hint">Swipe right to keep, left to pass, or use the buttons or arrow keys. Your partner sees what you decide on their cards. A name is only binned if you both pass.</p>
   {{ engine|json_script:"engine-data" }}
-  <div id="review" class="deck">{% include "names/partials/review_cards.html" %}</div>
+  <div id="review" class="deck" data-decisions-url="{% url 'decisions' token %}" data-shortlist-url="{% url 'shortlist_panel' token %}" data-cards-url="{% url 'new_cards' token %}">{% include "names/partials/review_cards.html" %}</div>
   <p id="deck-empty" class="hint" hidden>You've been through every name for now.</p>
   <p id="deck-status" class="visually-hidden" role="status"></p>
-  <p id="thinking" class="thinking htmx-indicator" role="status"><span data-z-spinner="ratio: 0.6"></span> Finding names for you…</p>
+  <div id="ai-status"></div>
   <p id="catalog-empty" class="hint" hidden>{% if engine.aiAllowed %}That's every match in our catalogue for now. AI can look further, using one of your monthly requests.{% else %}That's every match in our catalogue for now. AI is switched off in your settings, so try widening what you're looking for.{% endif %}</p>
   <div class="actions"
        id="suggest-actions"
@@ -42,7 +42,7 @@
        data-pick-url="{% url 'suggest_from_catalog' token %}"
        data-is-new="{{ is_new|yesno:'true,false' }}">
     <button class="z-button z-button-default" type="button" id="suggest-local">Suggest more names</button>
-    {% if engine.aiAllowed %}<button class="z-button z-button-text" type="button" id="suggest-ai" hidden hx-disabled-elt="this" hx-post="{% url 'suggest' token %}" hx-target="#review" hx-swap="beforeend" hx-indicator="#thinking">Ask AI for rarer names</button>{% endif %}
+    {% if engine.aiAllowed %}<button class="z-button z-button-text" type="button" id="suggest-ai" hidden hx-disabled-elt="this" hx-post="{% url 'suggest' token %}" hx-target="#ai-status" hx-swap="innerHTML">Ask AI for rarer names</button>{% endif %}
   </div>
 </section>
 {% else %}
@@ -63,7 +63,7 @@
 <section class="tile tile-ideas">
   <h2>Tap to suggest</h2>
   <p class="hint">Ideas that fit what the parents want. Tap any you like.</p>
-  <div hx-post="{% url 'family_ideas' token %}" hx-trigger="load" hx-swap="innerHTML"><p class="thinking" role="status">Finding ideas…</p></div>
+  <div data-ideas hx-post="{% url 'family_ideas' token %}" hx-trigger="load" hx-swap="innerHTML"><p class="thinking" role="status">Finding ideas…</p></div>
 </section>
 {% endif %}
 
@@ -96,7 +96,7 @@
 </section>
 <section class="tile tile-partner">
   <h2>Invite your partner</h2>
-  <p class="hint">They sign in with their own account and swipe through the same names. This link works once.</p>
+  <p class="hint">They sign in with their own account and swipe through the same names, and you each see what the other decided. This link works once.</p>
   <div class="share">
     <input class="z-input" id="invite-link" readonly value="{{ invite_url }}" aria-label="Partner invite link">
     <button class="z-button z-button-default" type="button" data-copy="#invite-link">Copy link</button>

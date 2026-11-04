@@ -23,22 +23,29 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 |---|---|---|
 | `SECRET_KEY` | Yes | Long random value. Mark it as a secret. |
 | `GEMINI_API_KEY` | Yes | Mark it as a secret. Used only on the server. |
-| `ALLOWED_HOSTS` | Yes | Your domain. |
+| `ALLOWED_HOSTS` | Yes | Your domain. `localhost` is only allowed with `DEBUG`, so a request sent straight to the server is refused. Health checks still work. |
 | `CSRF_TRUSTED_ORIGINS` | Yes | `https://` plus your domain. |
 | `DATABASE_URL` | Recommended | A Coolify Postgres URL. Otherwise SQLite at `/data`, which needs a persistent volume. |
-| `REDIS_URL` | Recommended | Shared cache, session cache and rate-limit counters. Without it, each worker keeps its own, so limits are looser. |
+| `REDIS_URL` | Yes | Shared cache, session cache and rate-limit counters. Without it, each worker keeps its own and a restart clears them, so limits are far looser. |
 | `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` or `EMAIL_USE_SSL`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | Yes | SMTP for sign-up and password-reset codes. Nobody can finish signing up without it. |
 | `LEGAL_ENTITY_NAME`, `LEGAL_ADDRESS`, `LEGAL_JURISDICTION_CITY`, `GRIEVANCE_OFFICER_NAME`, `GRIEVANCE_EMAIL` | Yes | Published in the legal pages, which show a visible placeholder until set. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | No | Shows "Continue with Google". The redirect URI is `https://<domain>/accounts/google/login/callback/`. |
 | `ADMIN_PATH` | No | Where the admin panel lives. Defaults to `manage/`. |
 | `REQUIRE_ADMIN_MFA` | No | Staff need two-factor sign-in for the admin panel. On unless `DEBUG`. |
+| `AI_ENRICH_BATCH_SIZE`, `AI_ENRICH_BATCH_WINDOW_SECONDS`, `AI_ENRICH_NAMES_PER_HOUR`, `AI_ENRICH_CALLS_PER_HOUR` | No | Approved names per LLM call, how long to wait to fill a batch, and the hourly caps on names and calls for tagging. Unreviewed names always get a call of their own. |
 | `AI_FREE_CALLS_PER_MONTH`, `CATALOG_SHARD_LIMIT`, `ACCOUNT_RETENTION_DAYS` | No | LLM allowance per parent, names per browser shard, days before an idle account is deleted. |
-| `TRUSTED_CLIENT_IP_HEADER` | Behind Cloudflare | `CF-Connecting-IP`, so login limits apply per visitor. |
+| `TRUSTED_CLIENT_IP_HEADER` | Yes, behind Cloudflare | `CF-Connecting-IP`, so limits apply per visitor. Only safe once the server is reachable solely through Cloudflare, because anyone else could send this header. |
+| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | Yes | Your `<team>.cloudflareaccess.com` and the Access application's AUD tag. The admin panel then refuses requests without a valid Access token, even if someone reaches the server directly. |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Yes | Asks Cloudflare whether someone signing up is a person. If Cloudflare can't answer, sign-up pauses. |
+| `SECURE_SSL_REDIRECT`, `SECURE_HSTS_SECONDS` | No | On unless `DEBUG`. HSTS starts at a day: raise it to `31536000` once HTTPS is proven, because browsers can't be told to forget it. |
 | `WEB_CONCURRENCY` | No | Gunicorn workers. Defaults to 2. |
-| `AI_RATE_PER_BOARD`, `AI_RATE_GLOBAL`, `BOARD_CREATE_RATE` | No | Limits on LLM spend and new boards. |
+| `AI_RATE_PER_IP`, `AI_RATE_PER_BOARD`, `AI_RATE_GLOBAL` | No | Limits on LLM spend, narrowest first. A request stopped by a narrow one doesn't count against the wider ones. |
+| `BOARD_CREATE_RATE`, `BOARD_CREATE_PER_USER`, `BOARD_RATE_PER_IP`, `ADD_RATE_PER_IP`, `GUEST_VOTERS_PER_IP` | No | Per-visitor and per-account limits. Generous, because mobile networks in India put many households behind one address. |
 | `GEMINI_MODEL`, `GEMINI_TTS_MODEL`, `GEMINI_TTS_VOICE` | No | Change models without touching code. |
 
-Schedule `python manage.py purge_inactive` daily: the Privacy Policy promises it. Bump `POLICY_VERSION` in settings when the policies change, and everyone is asked to accept again.
+Emails and every LLM call run off the request path, on background threads inside each web process (`names/jobs.py`), so there's no extra container. Schedule `python manage.py run_jobs` every few minutes to pick up anything stranded by a restart. Schedule `python manage.py purge_inactive` daily: the Privacy Policy promises it. Bump `POLICY_VERSION` in settings when the policies change, and everyone is asked to accept again.
+
+Before launch, `python manage.py check --deploy` should list no `names.W` warnings. Also, outside this code: make the server reachable only through Cloudflare (a Tunnel, or a firewall allowing only Cloudflare's addresses), point a Zero Trust application at your `ADMIN_PATH`, and set a billing cap in Google Cloud.
 
 ## Admin
 
@@ -48,7 +55,7 @@ Create a staff user with `python manage.py createsuperuser`, then open `/manage/
 
 - Parents sign up with email and password and verify a code by email (django-allauth). Their boards are private to members.
 - A partner joins through a single-use invite link, using their own account.
-- Relatives use the family link with no account: they can only vote and suggest. Parents can replace the link at any time.
+- Relatives use the family link with no account: they can only vote and suggest, and only reach the names their shortlist shows. Parents can replace the link at any time.
 
 ## Failure behaviour
 

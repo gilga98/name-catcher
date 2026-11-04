@@ -5,20 +5,27 @@ import hashlib
 import io
 import json
 import re
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from datetime import timedelta
+from functools import lru_cache
 
 from django.conf import settings
 from django.db.models import Count, F, Max, Q
+from django.utils import timezone
+from rapidfuzz.distance import JaroWinkler
 
+from . import jobs
 from .ai.base import NameIdea
-from .dedup import phonetic_key
-from .models import CatalogName, Genre
+from .ai.context import scrub
+from .dedup import looks_like_name, phonetic_key
+from .models import CatalogName, Genre, Name, NameAlias
 
 VALID_NAME = re.compile(r"^[^\d<>/:@]{1,40}$")
 COLUMNS = [
     "name", "meaning", "origin", "gender", "genres", "native", "respelling", "speech_lang", "rarity", "style",
-    "insight",
+    "insight", "variants",
 ]  # fmt: skip
 # The names an LLM reaches for first, whatever the brief. Popularity from our own boards is added to these.
 ALWAYS_OVERUSED = (
@@ -27,6 +34,9 @@ ALWAYS_OVERUSED = (
 )  # fmt: skip
 _VOWELS = "aeiou"
 _MEANING_WORDS, _INSIGHT_WORDS = 12, 20
+RETRY_FAILED_AFTER = timedelta(hours=1)
+SAME_SPELLING = 0.7  # Below this, the LLM has changed the name rather than its spelling, so it isn't merged.
+_WORD_BREAK = re.compile(r"[\s,.;:!?()\"'।॥-]+")
 _MARKUP = re.compile(r"[*_`#]+")
 # Lets a parent's own words find catalogue genres in the browser, without a call to the LLM.
 _GENRE_WORDS = {
@@ -91,12 +101,101 @@ def record_picks(entries: Iterable[CatalogName]) -> None:
     CatalogName.objects.filter(pk__in=[e.pk for e in entries]).update(picks=F("picks") + 1)
 
 
+def canonical_key(text: str) -> str:
+    """The phonetic key, then whichever entry we've learned that spelling belongs to."""
+    key = phonetic_key(text)[:60]
+    alias = NameAlias.objects.filter(key=key).select_related("entry").first()
+    return alias.entry.key if alias else key
+
+
 def lookup(key: str) -> CatalogName | None:
-    """A known answer for this name. Unreviewed LLM text is no worse than asking again; user text waits."""
+    """A known answer for this name. Asked about alone, the LLM saw only the name, so that's no worse than asking
+    again. Text from a parent's brief or a contributor is shaped by what they wrote, so it waits for a person."""
     trusted = Q(status=CatalogName.Status.APPROVED) | Q(
-        status=CatalogName.Status.PENDING, source=CatalogName.Source.LLM
+        status=CatalogName.Status.PENDING, enrich_state=CatalogName.Enrich.DONE
     )
     return CatalogName.objects.filter(trusted, key=key).exclude(meaning="").first()
+
+
+def request_enrichment(text: str, key: str) -> bool:
+    """Queues this name for the next LLM batch, unless it's already waiting. False means it won't get one."""
+    waiting = {"text": text[:60], "source": CatalogName.Source.LLM, "enrich_state": CatalogName.Enrich.PENDING}
+    entry, _ = CatalogName.objects.get_or_create(key=key, defaults=waiting)
+    if entry.status == CatalogName.Status.REJECTED:
+        return False
+    if entry.enrich_state == CatalogName.Enrich.FAILED and timezone.now() - entry.updated_at < RETRY_FAILED_AFTER:
+        return False
+    if entry.enrich_state in (CatalogName.Enrich.NONE, CatalogName.Enrich.FAILED):
+        entry.enrich_state, entry.enrich_attempts = CatalogName.Enrich.PENDING, 0
+        entry.save(update_fields=["enrich_state", "enrich_attempts", "updated_at"])
+    jobs.kick(jobs.LLM)
+    return True
+
+
+def queue_blank_entries(entries) -> None:
+    """Admins can upload bare names and let the batches fill them in."""
+    entries.filter(meaning="", enrich_state=CatalogName.Enrich.NONE).update(enrich_state=CatalogName.Enrich.PENDING)
+    jobs.kick(jobs.LLM)
+
+
+def wait_for_batch() -> None:
+    """A brief pause lets names arriving at about the same time share one LLM call."""
+    if settings.AI_ENRICH_BATCH_WINDOW_SECONDS:
+        time.sleep(settings.AI_ENRICH_BATCH_WINDOW_SECONDS)
+
+
+def _merge_spelling(entry: CatalogName, canonical: str) -> CatalogName:
+    """The LLM says this is another spelling of `canonical`. Remember that, so this one never costs a call again."""
+    old_key = entry.key
+    target = CatalogName.objects.filter(key=canonical).exclude(pk=entry.pk).first()
+    if target is None:
+        entry.key = canonical
+        entry.save(update_fields=["key"])
+        target = entry
+    elif not (entry.source == CatalogName.Source.USER or entry.picks):
+        entry.delete()
+    NameAlias.objects.update_or_create(key=old_key, defaults={"entry": target})
+    Name.objects.filter(key=old_key).update(key=target.key)
+    return target
+
+
+def _store_answer(entry: CatalogName, idea: NameIdea) -> None:
+    # Text from a contributor or a parent's brief hasn't been reviewed, so it mustn't be what other families are shown.
+    unreviewed = entry.status == CatalogName.Status.PENDING and entry.source != CatalogName.Source.ADMIN
+    for attribute, value in (
+        ("meaning", idea.meaning[:300]),
+        ("insight", idea.insight[:200]),
+        ("origin", idea.origin[:80]),
+        ("native", idea.native_script[:60]),
+        ("respelling", idea.respelling[:80]),
+        ("speech_lang", idea.speech_lang[:20]),
+    ):
+        if unreviewed or not getattr(entry, attribute):
+            setattr(entry, attribute, value)
+
+
+def _store_labels(entry: CatalogName, idea: NameIdea) -> None:
+    """An admin's choices on a live entry stand. Everything else takes the LLM's reading."""
+    if entry.status == CatalogName.Status.PENDING or entry.source == CatalogName.Source.LLM:
+        entry.gender = _choice(idea.gender, CatalogName.Gender, "any")
+        entry.rarity = _choice(idea.rarity, CatalogName.Rarity, "uncommon")
+        entry.style = _choice(idea.style, CatalogName.Style, "any")
+
+
+def apply_idea(entry: CatalogName, idea: NameIdea) -> CatalogName:
+    """Stores the LLM's answer on the shared entry. Returns the entry that holds it, which may be another spelling."""
+    canonical = phonetic_key(idea.name)[:60]
+    same_name = JaroWinkler.normalized_similarity(canonical, entry.key) >= SAME_SPELLING
+    if canonical and canonical != entry.key and same_name:
+        entry = _merge_spelling(entry, canonical)
+    _store_answer(entry, idea)
+    _store_labels(entry, idea)
+    if not entry.text.isascii() and idea.name.isascii():
+        entry.text = idea.name[:60]
+    entry.enrich_state = CatalogName.Enrich.DONE
+    entry.save()
+    entry.genres.add(*Genre.objects.filter(name__in=idea.genres))
+    return entry
 
 
 def overused_names() -> list[str]:
@@ -104,9 +203,15 @@ def overused_names() -> list[str]:
     return sorted({*ALWAYS_OVERUSED, *popular})
 
 
+@lru_cache(maxsize=1)
+def _genre_keys() -> dict[str, str]:
+    return {phonetic_key(word): genre for genre, vocabulary in _GENRE_WORDS.items() for word in vocabulary.split()}
+
+
 def themes_from_text(text: str) -> list[str]:
-    words = set(re.findall(r"[a-z]+", text.lower()))
-    return sorted(genre for genre, vocabulary in _GENRE_WORDS.items() if words & set(vocabulary.split()))
+    """Works in any script: ಸೂರ್ಯ and सूर्य reach the same genre as "surya", because they share a key."""
+    keys = {phonetic_key(word) for word in _WORD_BREAK.split(text)}
+    return sorted({genre for key, genre in _genre_keys().items() if key in keys})
 
 
 def tidy(text: str, max_words: int) -> str:
@@ -115,12 +220,17 @@ def tidy(text: str, max_words: int) -> str:
     return " ".join(words[:max_words]).rstrip(",;:")
 
 
+def _without_contact_details(text: str) -> str:
+    """No true fact about a name holds a link or a phone number, so one in an answer means the LLM was misled."""
+    return text if scrub(text) == text else ""
+
+
 def tidy_idea(idea: NameIdea) -> NameIdea:
     return idea.model_copy(
         update={
-            "meaning": tidy(idea.meaning, _MEANING_WORDS),
-            "insight": tidy(idea.insight, _INSIGHT_WORDS)[:200],
-            "surname_fit": tidy(idea.surname_fit, _INSIGHT_WORDS)[:200],
+            "meaning": _without_contact_details(tidy(idea.meaning, _MEANING_WORDS)),
+            "insight": _without_contact_details(tidy(idea.insight, _INSIGHT_WORDS)[:200]),
+            "surname_fit": _without_contact_details(tidy(idea.surname_fit, _INSIGHT_WORDS)[:200]),
         }
     )
 
@@ -174,8 +284,8 @@ def remember_ideas(ideas: Iterable[NameIdea]) -> None:
 
 
 def surname_fit(text: str, surname: str) -> str:
-    """A plain observation about how the two names sound together. Needs no LLM and never leaves the server."""
-    first, last = text.strip().lower(), surname.strip().lower()
+    """A plain observation about how the two names sound together. Needs no LLM, and works in any script."""
+    first, last = phonetic_key(text), phonetic_key(surname)
     if not first or not last:
         return ""
     if first[-1] in _VOWELS and last[0] in _VOWELS:
@@ -247,7 +357,10 @@ def _row_genres(row: dict, options: ImportOptions, known: dict[str, Genre]) -> l
 def _merge(entry: CatalogName, fields: dict, genres: list[Genre], options: ImportOptions, result: ImportResult) -> None:
     if not options.trusted:
         # Strangers can't edit what's already live, but agreement between them is a useful signal to moderators.
-        CatalogName.objects.filter(pk=entry.pk).update(submissions=F("submissions") + 1)
+        user = options.submitted_by
+        if entry.submitted_by_id != user.pk and not entry.supporters.filter(pk=user.pk).exists():
+            entry.supporters.add(user)
+            CatalogName.objects.filter(pk=entry.pk).update(submissions=F("submissions") + 1)
         result.duplicates += 1
         return
     for name in ("meaning", "insight", "origin", "native", "respelling", "speech_lang"):
@@ -259,9 +372,19 @@ def _merge(entry: CatalogName, fields: dict, genres: list[Genre], options: Impor
     result.merged += 1
 
 
+def _add_variants(entry: CatalogName, row: dict, options: ImportOptions) -> None:
+    if not options.trusted:
+        return
+    for variant in row.get("variants", "").split("|"):
+        key = phonetic_key(variant)[:60]
+        if key and key != entry.key and not CatalogName.objects.filter(key=key).exists():
+            NameAlias.objects.update_or_create(key=key, defaults={"entry": entry})
+
+
 def _import_row(index: int, row: dict, options: ImportOptions, known: dict[str, Genre], result: ImportResult) -> None:
     text = row.get("name", "")
-    key = phonetic_key(text)[:60] if VALID_NAME.match(text) else ""
+    allowed = VALID_NAME.match(text) and (options.trusted or looks_like_name(text))
+    key = canonical_key(text) if allowed else ""
     if not key:
         result.errors.append(f"Line {index}: “{text[:40]}” isn't a name.")
         return
@@ -270,10 +393,11 @@ def _import_row(index: int, row: dict, options: ImportOptions, known: dict[str, 
     entry = CatalogName.objects.filter(key=key).first()
     if entry:
         _merge(entry, fields, genres, options, result)
-        return
-    entry = CatalogName.objects.create(**fields)
-    entry.genres.set(genres)
-    result.created += 1
+    else:
+        entry = CatalogName.objects.create(**fields)
+        entry.genres.set(genres)
+        result.created += 1
+    _add_variants(entry, row, options)
 
 
 def import_rows(text: str, options: ImportOptions) -> ImportResult:

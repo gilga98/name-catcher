@@ -28,9 +28,9 @@ class Spy(StubAI):
         self.requests.append(request)
         return super().suggest(request)
 
-    def describe(self, name, genres):
-        self.described.append(name)
-        return super().describe(name, genres)
+    def describe_many(self, names, genres):
+        self.described.append(names)
+        return super().describe_many(names, genres)
 
 
 @pytest.fixture(autouse=True)
@@ -74,7 +74,7 @@ def approved(text, **fields):
 def test_only_useful_context_reaches_the_llm(board, spy):
     board.brief |= {"notes": "Born by the river. Call me on 98765 43210 or a@b.co", "nickname": "Chintu"}
     board.save()
-    services.suggest_names(board)
+    services.start_suggesting(board)
     sent = json.dumps(spy.requests[0].brief, ensure_ascii=False)
     assert "river" in sent and spy.requests[0].brief["themes"] == ["Light"]
     for private in ("Sharma", "Meena", "Rohan", "Chintu", "98765", "a@b.co"):
@@ -146,7 +146,7 @@ def test_each_name_is_only_ever_described_once(board, spy):
     second = Name.objects.create(board=other_board, text="Zubin", key=catalog.phonetic_key("Zubin"))
     services.describe_name(first)
     services.describe_name(second)
-    assert spy.described == ["Zubin"]
+    assert spy.described == [["Zubin"]]
 
 
 def test_recordings_are_shared_between_families(board, monkeypatch):
@@ -156,9 +156,8 @@ def test_recordings_are_shared_between_families(board, monkeypatch):
     approved("Ahana")
     first = Name.objects.create(board=board, text="Ahana", key=catalog.phonetic_key("Ahana"))
     second = Name.objects.create(board=Board.objects.create(), text="Ahana", key=catalog.phonetic_key("Ahana"))
-    services.pronunciation_audio(first)
-    assert not services.audio_needs_llm(second)
-    assert services.pronunciation_audio(second) == b"RIFF"
+    services.start_speaking(first)
+    assert services.cached_audio(second) == b"RIFF"
     assert len(spoken) == 1
 
 
@@ -167,7 +166,7 @@ def test_switching_ai_off_stops_all_llm_use(board, user, spy, client):
     profile.ai_enabled = False
     profile.save()
     with pytest.raises(base.AIError):
-        services.suggest_names(board)
+        services.start_suggesting(board)
     name = Name.objects.create(board=board, text="Zubin", key=catalog.phonetic_key("Zubin"))
     response = client.post(reverse("details", args=[board.parent_token, name.pk]), **HTMX)
     assert "isn't in our catalogue" in response.content.decode()

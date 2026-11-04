@@ -20,19 +20,43 @@ function say(button) {
   speechSynthesis.speak(utterance);
 }
 
+const VOICE_WAIT_MS = 1500;
+const VOICE_ATTEMPTS = 20;
+
+// The server records in the background and answers 202 until it's ready.
+async function fetchVoice(url) {
+  for (let attempt = 0; attempt < VOICE_ATTEMPTS; attempt++) {
+    const response = await fetch(url);
+    if (response.status === 200) return response.blob();
+    if (response.status !== 202) throw new Error(await response.text());
+    await new Promise((resolve) => setTimeout(resolve, VOICE_WAIT_MS));
+  }
+  throw new Error("The natural voice is taking too long. Try your device's voice.");
+}
+
 async function playAudio(button) {
   const label = button.textContent;
+  if (button.dataset.ready) {
+    new Audio(button.dataset.ready).play();
+    button.textContent = label === "Tap to play" ? "Natural voice" : label;
+    return;
+  }
   button.disabled = true;
-  button.textContent = "Loading…";
+  button.textContent = "Preparing…";
   try {
-    const response = await fetch(button.dataset.audio);
-    if (!response.ok) throw new Error(await response.text());
-    new Audio(URL.createObjectURL(await response.blob())).play();
+    const source = URL.createObjectURL(await fetchVoice(button.dataset.audio));
+    button.dataset.ready = source;
+    button.textContent = label;
+    await new Audio(source).play();
   } catch (error) {
-    toast(error.message);
+    // Browsers may block sound that starts long after the tap. The recording is ready for the next one.
+    if (error.name === "NotAllowedError") button.textContent = "Tap to play";
+    else {
+      button.textContent = label;
+      toast(error.message);
+    }
   } finally {
     button.disabled = false;
-    button.textContent = label;
   }
 }
 

@@ -1,6 +1,7 @@
 import uuid
 from functools import wraps
 
+from allauth.account.adapter import get_adapter
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
@@ -15,11 +16,15 @@ from django_ratelimit.decorators import ratelimit
 from django_ratelimit.exceptions import Ratelimited
 
 from . import accounts, catalog, services
+from .ai.base import AIError
 from .forms import GENDERS, STYLES, UNIQUENESS, AddNameForm, BriefForm
-from .models import Board, Name
+from .jobs import LLM, kick
+from .models import Board, Job, Name
 from .services import Voter
 
 PENDING_BRIEF = "pending_brief"
+NOT_A_NAME = "Enter just the name, up to 28 letters."
+DIFFERENT_NAME = "That looks like a different name. Add it on its own."
 
 
 def rate_limited(request: HttpRequest, exception: Exception) -> HttpResponse:
@@ -35,9 +40,24 @@ def _everyone(_group: str, _request: HttpRequest) -> str:
     return "all"
 
 
+def _client_ip(_group: str, request: HttpRequest) -> str:
+    return get_adapter().get_client_ip(request)
+
+
+def _ip_on_board(group: str, request: HttpRequest) -> str:
+    return f"{_client_ip(group, request)}:{_board_token(group, request)}"
+
+
 def _spend_ai_budget(request: HttpRequest) -> None:
-    """Cap LLM spend per board and overall, so a leaked link can't run up the bill."""
-    limits = (("ai-all", _everyone, settings.AI_RATE_GLOBAL), ("ai-board", _board_token, settings.AI_RATE_PER_BOARD))
+    """Cap LLM spend per visitor, per board and overall, so a leaked link can't run up the bill.
+
+    The shared limit comes last, and stops counting once a narrower one trips: one person can't use it up for everyone.
+    """
+    limits = (
+        ("ai-ip", _client_ip, settings.AI_RATE_PER_IP),
+        ("ai-board", _board_token, settings.AI_RATE_PER_BOARD),
+        ("ai-all", _everyone, settings.AI_RATE_GLOBAL),
+    )
     for group, key, rate in limits:
         if is_ratelimited(request, group=group, key=key, rate=rate, increment=True):
             raise Ratelimited
@@ -47,8 +67,21 @@ def _voter(request: HttpRequest, is_parent: bool) -> Voter:
     if is_parent:
         name = accounts.profile_of(request.user).display_name or "Parent"
         return Voter(id=accounts.voter_id(request.user), name=name, is_parent=True)
-    voter_id = request.session.setdefault("voter", uuid.uuid4().hex)
-    return Voter(id=voter_id, name=request.session.get("voter_name", "Family"), is_parent=False)
+    return Voter(id=request.session.get("voter", ""), name=request.session.get("voter_name", "Family"), is_parent=False)
+
+
+def _admit_guest(request: HttpRequest) -> None:
+    """A relative gets an identity on their first vote or suggestion, so just reading a board stores nothing.
+
+    Clearing cookies makes a new voter, so this also limits how many votes one address can invent.
+    """
+    if request.is_parent or "voter" in request.session:
+        return
+    rate = settings.GUEST_VOTERS_PER_IP
+    if is_ratelimited(request, group="guest-voter", key=_ip_on_board, rate=rate, increment=True):
+        raise Ratelimited
+    request.session["voter"] = uuid.uuid4().hex
+    request.voter = _voter(request, False)
 
 
 def _send_to_login(request: HttpRequest, board: Board) -> HttpResponse:
@@ -64,6 +97,9 @@ def with_board(*, parent_only: bool = False):
     def decorator(view):
         @wraps(view)
         def wrapper(request: HttpRequest, token: str, *args, **kwargs):
+            rate = settings.BOARD_RATE_PER_IP
+            if is_ratelimited(request, group="board-ip", key=_client_ip, rate=rate, increment=True):
+                raise Ratelimited
             board = Board.objects.filter(Q(parent_token=token) | Q(guest_token=token)).first()
             if board is None or (parent_only and token == board.guest_token):
                 raise Http404
@@ -81,8 +117,14 @@ def with_board(*, parent_only: bool = False):
     return decorator
 
 
+def _visible(request: HttpRequest, name: Name) -> Name:
+    if not services.can_see(name, request.voter):
+        raise Http404
+    return name
+
+
 def _name(request: HttpRequest, pk: int) -> Name:
-    return get_object_or_404(request.board.names.defer("audio"), pk=pk)
+    return _visible(request, get_object_or_404(request.board.names.defer("audio"), pk=pk))
 
 
 def _context(request: HttpRequest, **extra) -> dict:
@@ -108,12 +150,14 @@ def _start_board(request: HttpRequest) -> HttpResponse:
     """A brief filled in before signing up waits in the session, so nobody has to answer twice."""
     if not request.user.is_authenticated:
         return redirect("account_signup")
+    if is_ratelimited(request, group="create-user", key="user", rate=settings.BOARD_CREATE_PER_USER, increment=True):
+        raise Ratelimited
     board = services.create_board(request.user, request.session.pop(PENDING_BRIEF))
     return redirect("board", token=board.parent_token)
 
 
 @require_http_methods(["GET", "POST"])
-@ratelimit(group="create", key=lambda _g, _r: "all", rate=settings.BOARD_CREATE_RATE, method="POST", block=True)
+@ratelimit(group="create", key=_client_ip, rate=settings.BOARD_CREATE_RATE, method="POST", block=True)
 def home(request: HttpRequest) -> HttpResponse:
     form = BriefForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -218,11 +262,50 @@ def suggest_from_catalog(request: HttpRequest, token: str) -> HttpResponse:
     return render(request, "names/partials/review_cards.html", _context(request, queue=names))
 
 
+def _ai_status(request: HttpRequest, job: Job) -> HttpResponse:
+    """Parents keep swiping while AI works. This small element polls, then adds its cards to the deck."""
+    if job.status == Job.Status.DONE:
+        names = request.board.names.filter(pk__in=job.result.get("names", [])).defer("audio")
+        where = "afterbegin" if job.payload.get("more_like") else "beforeend"
+        context = _context(request, queue=names, finished=True, where=where)
+    elif job.status == Job.Status.FAILED:
+        context = _context(request, error=job.result.get("error"), finished=True)
+    else:
+        kick(LLM)
+        context = _context(request, job=job, finished=False)
+    return render(request, "names/partials/ai_status.html", context)
+
+
 @require_POST
 @with_board(parent_only=True)
 def suggest(request: HttpRequest, token: str) -> HttpResponse:
     _spend_ai_budget(request)
-    names = services.suggest_names(request.board)
+    return _ai_status(request, services.start_suggesting(request.board))
+
+
+@require_GET
+@with_board(parent_only=True)
+def ai_job(request: HttpRequest, token: str, pk: int) -> HttpResponse:
+    return _ai_status(request, get_object_or_404(Job, pk=pk, board=request.board, kind="suggest"))
+
+
+@require_GET
+@with_board(parent_only=True)
+def decisions(request: HttpRequest, token: str) -> JsonResponse:
+    return JsonResponse(services.decisions(request.board, request.voter))
+
+
+@require_GET
+@with_board(parent_only=True)
+def shortlist_panel(request: HttpRequest, token: str) -> HttpResponse:
+    return _shortlist(request)
+
+
+@require_GET
+@with_board(parent_only=True)
+def new_cards(request: HttpRequest, token: str) -> HttpResponse:
+    ids = [int(pk) for pk in request.GET.getlist("id") if pk.isdecimal()]
+    names = services.cards(request.board, request.voter, ids)
     return render(request, "names/partials/review_cards.html", _context(request, queue=names))
 
 
@@ -230,8 +313,7 @@ def suggest(request: HttpRequest, token: str) -> HttpResponse:
 @with_board(parent_only=True)
 def more_like_name(request: HttpRequest, token: str, pk: int) -> HttpResponse:
     _spend_ai_budget(request)
-    names = services.suggest_names(request.board, more_like=_name(request, pk).text)
-    return render(request, "names/partials/review_cards.html", _context(request, queue=names))
+    return _ai_status(request, services.start_suggesting(request.board, more_like=_name(request, pk).text))
 
 
 @require_POST
@@ -253,6 +335,7 @@ def pass_name(request: HttpRequest, token: str, pk: int) -> HttpResponse:
 def undo_swipe(request: HttpRequest, token: str, pk: int) -> HttpResponse:
     name = _name(request, pk)
     services.undo_swipe(name, request.voter)
+    services.with_partner_notes([name], request.board, request.voter)
     context = _context(request, queue=[name], shortlist=services.shortlist(request.board, request.voter), oob=True)
     return render(request, "names/partials/undo.html", context)
 
@@ -278,12 +361,14 @@ def family_ideas(request: HttpRequest, token: str) -> HttpResponse:
     board = request.board
     allow_llm = services.family_ideas_need_llm(board) and _may_spend_ai(request)
     ideas = services.family_ideas(board, allow_llm=allow_llm)
-    return render(request, "names/partials/family_ideas.html", _context(request, ideas=ideas))
+    pending = services.family_ideas_pending(board)
+    return render(request, "names/partials/family_ideas.html", _context(request, ideas=ideas, pending=pending))
 
 
 @require_POST
 @with_board()
 def vote_name(request: HttpRequest, token: str, pk: int) -> HttpResponse:
+    _admit_guest(request)
     services.toggle_vote(_name(request, pk), request.voter)
     return _shortlist(request)
 
@@ -299,10 +384,12 @@ def rank(request: HttpRequest, token: str) -> HttpResponse:
 @require_POST
 @with_board()
 @ratelimit(group="add", key=_board_token, rate=settings.ADD_RATE_PER_BOARD, block=True)
+@ratelimit(group="add-ip", key=_client_ip, rate=settings.ADD_RATE_PER_IP, block=True)
 def add(request: HttpRequest, token: str) -> HttpResponse:
     form = AddNameForm(request.POST)
     if not form.is_valid():
-        return HttpResponse("Enter just the name, up to 40 letters.", status=422, content_type="text/plain")
+        return HttpResponse(NOT_A_NAME, status=422, content_type="text/plain")
+    _admit_guest(request)
     if form.cleaned_data["by"]:
         request.session["voter_name"] = form.cleaned_data["by"]
     text = form.cleaned_data["text"]
@@ -311,16 +398,16 @@ def add(request: HttpRequest, token: str) -> HttpResponse:
     if result.duplicate:
         context = _context(request, match=result.duplicate, text=text)
         return render(request, "names/partials/duplicate_prompt.html", context)
-    return _added(request, result.name)
+    return _added(request, result.name, text)
 
 
-def _added(request: HttpRequest, name: Name) -> HttpResponse:
+def _added(request: HttpRequest, name: Name | None, text: str) -> HttpResponse:
     context = _context(
         request,
         name=name,
         shortlist=services.shortlist(request.board, request.voter),
         oob=True,
-        message=f"{name.text} added." if request.is_parent else f"Thanks. {name.text} is with the parents now.",
+        message=f"{text} added." if request.is_parent else f"Thanks. {text} is with the parents now.",
     )
     return render(request, "names/partials/added.html", context)
 
@@ -331,8 +418,10 @@ def merge_name(request: HttpRequest, token: str, pk: int) -> HttpResponse:
     name = _name(request, pk)
     form = AddNameForm(request.POST)
     if not form.is_valid():
-        return HttpResponse("Enter just the name, up to 40 letters.", status=422, content_type="text/plain")
-    services.merge_into(name, form.cleaned_data["text"], request.voter)
+        return HttpResponse(NOT_A_NAME, status=422, content_type="text/plain")
+    _admit_guest(request)
+    if not services.merge_into(name, form.cleaned_data["text"], request.voter):
+        return HttpResponse(DIFFERENT_NAME, status=422, content_type="text/plain")
     context = _context(
         request,
         name=None,
@@ -361,19 +450,26 @@ def split_name(request: HttpRequest, token: str, pk: int) -> HttpResponse:
 @with_board()
 def name_details(request: HttpRequest, token: str, pk: int) -> HttpResponse:
     name = _name(request, pk)
-    if services.details_need_llm(name):
-        _spend_ai_budget(request)
-    found = services.describe_name(name)
-    return render(request, "names/partials/name_details.html", _context(request, name=name, no_details=not found))
+    state = services.describe_name(name)
+    context = _context(request, name=name, no_details=state == services.Details.UNAVAILABLE)
+    return render(request, "names/partials/name_details.html", context)
 
 
 @require_GET
 @with_board()
 def name_audio(request: HttpRequest, token: str, pk: int) -> HttpResponse:
-    name = get_object_or_404(request.board.names, pk=pk)
-    if services.audio_needs_llm(name):
-        _spend_ai_budget(request)
-    audio = services.pronunciation_audio(name)
+    name = _visible(request, get_object_or_404(request.board.names, pk=pk))
+    audio = services.cached_audio(name)
+    if audio is None:
+        if not services.speech_underway(name):  # Asking again while it records costs nothing, so it spends nothing.
+            _spend_ai_budget(request)
+        job = services.start_speaking(name)
+        if job.status == Job.Status.FAILED:
+            raise AIError(job.result.get("error", "The natural voice isn't available right now."))
+        name.refresh_from_db()
+        audio = services.cached_audio(name)
+    if audio is None:
+        return HttpResponse(status=202)  # Still recording. The browser asks again in a moment.
     response = HttpResponse(audio, content_type="audio/wav")
     response["Cache-Control"] = "private, max-age=86400"
     return response

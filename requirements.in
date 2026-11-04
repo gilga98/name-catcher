@@ -12,3 +12,5 @@ indic-transliteration
 Unidecode
 django-allauth[socialaccount,mfa]
 django-redis
+httpx
+PyJWT[crypto]

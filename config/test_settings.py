@@ -10,3 +10,6 @@ from .settings import *  # noqa: E402, F403
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+EMAIL_DELIVERY_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+JOBS_EAGER = True
+AI_ENRICH_BATCH_WINDOW_SECONDS = 0

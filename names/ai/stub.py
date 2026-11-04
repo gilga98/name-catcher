@@ -3,7 +3,7 @@
 import io
 import wave
 
-from .base import NameIdea, SuggestionRequest
+from .base import DescribedIdea, NameIdea, SuggestionRequest
 
 _IDEAS = (
     ("Aarav", "आरव", "Peaceful, a calm and gentle sound", "Sanskrit", "AA-ruhv", "hi-IN"),
@@ -41,8 +41,9 @@ class StubAI:
         fresh = [row for row in _IDEAS if row[0] not in seen]
         return [_idea(row) for row in fresh[:4]]
 
-    def describe(self, name: str, genres: list[str]) -> NameIdea:
-        return _idea((name, name, "A name your family suggested", "", name, "en-IN"))
+    def describe_many(self, names: list[str], genres: list[str]) -> list[DescribedIdea]:
+        described = (_idea((name, name, "A name your family suggested", "", name, "en-IN")) for name in names)
+        return [DescribedIdea(**idea.model_dump(), given=idea.name) for idea in described]
 
     def speak(self, text: str) -> bytes:
         buffer = io.BytesIO()

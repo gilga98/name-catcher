@@ -179,6 +179,7 @@ def test_guest_duplicate_asks_before_merging(guest, board):
     assert existing.votes.count() == 1
 
 
+@override_settings(JOBS_EAGER=False)
 def test_adding_a_name_never_waits_on_the_llm(parent, guest, board, monkeypatch):
     def no_llm():
         raise AssertionError("adding a name must not call the LLM")
@@ -191,9 +192,10 @@ def test_adding_a_name_never_waits_on_the_llm(parent, guest, board, monkeypatch)
 
 
 def test_details_load_after_adding_and_only_once(parent, board, monkeypatch):
-    post(parent, "add", text="Zoya")
-    name = board.names.get()
-    assert reverse("details", args=[parent[1], name.pk]) in page(parent).content.decode()
+    with override_settings(JOBS_EAGER=False):
+        post(parent, "add", text="Zoya")
+        name = board.names.get()
+        assert reverse("details", args=[parent[1], name.pk]) in page(parent).content.decode()
 
     response = post(parent, "details", name.pk)
     name.refresh_from_db()
@@ -257,7 +259,7 @@ def test_ranking_saves_the_new_order(parent, board):
 
 
 def test_audio_is_generated_once_then_served_from_the_database(guest, board):
-    name = Name.objects.create(board=board, text="Tara", key="tara")
+    name = Name.objects.create(board=board, text="Tara", key="tara", status=Name.Status.KEPT)
     client, token = guest
     response = client.get(reverse("audio", args=[token, name.pk]))
     assert response["Content-Type"] == "audio/wav"
@@ -311,7 +313,7 @@ def test_missing_key_gives_a_clear_error_and_never_leaks_config(parent):
     get_ai.cache_clear()
     response = post(parent, "suggest")
     get_ai.cache_clear()
-    assert response.status_code == 502
+    assert response.status_code == 200  # It failed in the background, and the person is told in place.
     assert "GEMINI_API_KEY" in response.content.decode()
 
 

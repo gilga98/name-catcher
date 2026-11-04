@@ -3,6 +3,7 @@ import secrets
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 _VOWEL_GROUP = re.compile(r"[aeiouy]+")
 
@@ -62,9 +63,10 @@ class Name(models.Model):
 
     @property
     def syllables(self) -> int:
-        spoken = self.respelling or self.text
-        beats = spoken.count("-") + 1 if "-" in spoken else len(_VOWEL_GROUP.findall(spoken.lower()))
-        return max(beats, 1)
+        """Counted from the romanised key when there's no respelling yet, so it works for any script."""
+        if "-" in self.respelling:
+            return self.respelling.count("-") + 1
+        return max(len(_VOWEL_GROUP.findall(self.key)), 1)
 
     def settle(self) -> None:
         """Binned only when every parent has rejected it. Any parent's yes keeps it alive."""
@@ -155,6 +157,15 @@ class CatalogName(models.Model):
         CLASSIC = "classic"
         MODERN = "modern"
 
+    class Enrich(models.TextChoices):
+        """Whether the LLM has filled in this entry. Every family shares the result, so it only happens once."""
+
+        NONE = "none"
+        PENDING = "pending"
+        RUNNING = "running"
+        DONE = "done"
+        FAILED = "failed"
+
     text = models.CharField(max_length=60)
     key = models.CharField(max_length=60, unique=True)
     native = models.CharField(max_length=60, blank=True)
@@ -166,11 +177,15 @@ class CatalogName(models.Model):
     gender = models.CharField(max_length=10, choices=Gender, default=Gender.ANY)
     rarity = models.CharField(max_length=10, choices=Rarity, default=Rarity.UNCOMMON)
     style = models.CharField(max_length=10, choices=Style, default=Style.ANY)
+    enrich_state = models.CharField(max_length=10, choices=Enrich, default=Enrich.NONE, db_index=True)
+    enrich_attempts = models.PositiveSmallIntegerField(default=0)
+    enrich_claimed_at = models.DateTimeField(null=True, blank=True)
     genres = models.ManyToManyField(Genre, blank=True, related_name="names")
     status = models.CharField(max_length=10, choices=Status, default=Status.PENDING, db_index=True)
     source = models.CharField(max_length=10, choices=Source, default=Source.ADMIN)
     submitted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     submissions = models.PositiveIntegerField(default=1)  # How many people independently offered this name.
+    supporters = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="+")
     picks = models.PositiveIntegerField(default=0)  # How often it reached a board. High means overused.
     audio = models.BinaryField(null=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True)
@@ -180,6 +195,16 @@ class CatalogName(models.Model):
 
     def __str__(self) -> str:
         return self.text
+
+
+class NameAlias(models.Model):
+    """A spelling rules can't reach, pointing at its catalogue entry: Mohammed at Muhammad, லட்சுமி at Lakshmi."""
+
+    key = models.CharField(max_length=60, unique=True)
+    entry = models.ForeignKey(CatalogName, on_delete=models.CASCADE, related_name="aliases")
+
+    def __str__(self) -> str:
+        return self.key
 
 
 class ConsentRecord(models.Model):
@@ -213,7 +238,34 @@ class AICall(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="ai_calls")
     kind = models.CharField(max_length=10, choices=Kind)
+    units = models.PositiveSmallIntegerField(default=1)  # Names covered by this request, when batched.
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class Job(models.Model):
+    """Third-party work waiting to run off the request path. See jobs.py."""
+
+    class Status(models.TextChoices):
+        QUEUED = "queued"
+        RUNNING = "running"
+        DONE = "done"
+        FAILED = "failed"
+
+    queue = models.CharField(max_length=10)
+    kind = models.CharField(max_length=20)
+    payload = models.JSONField(default=dict)
+    result = models.JSONField(default=dict)
+    status = models.CharField(max_length=10, choices=Status, default=Status.QUEUED)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    board = models.ForeignKey(Board, null=True, blank=True, on_delete=models.CASCADE)
+    dedupe = models.CharField(max_length=80, blank=True, db_index=True)
+    run_after = models.DateTimeField(default=timezone.now)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["queue", "status", "run_after"])]

@@ -10,7 +10,7 @@ from google import genai
 from google.genai import errors, types
 from pydantic import BaseModel
 
-from .base import AIError, NameIdea, SuggestionRequest
+from .base import AIError, DescribedIdea, NameIdea, SuggestionRequest
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +48,21 @@ If more_like is set, stay close to that name's sound and feel.
 Avoid names with an unfortunate meaning in another major Indian language or in English.
 {_FORMAT}"""
 DESCRIBE = f"""You describe Indian baby names. {DATA_ONLY}
-Describe the given name, using its Latin spelling in "name". If it is not a known name, say so in "meaning"
-rather than guessing, and leave insight empty.
+"names" lists names in any script or spelling. Return one item for each.
+given: the input, copied exactly.
+name: the most standard Latin spelling of that same name. Change the spelling only for the same name, never to a
+similar but different one, so Mohamad may become Muhammad, but Anaya must not become Ananya.
+If it is not a known name, say so in "meaning" rather than guessing, and leave insight empty.
+surname_fit: always empty.
 {_FORMAT}"""
 
 
 class _Ideas(BaseModel):
     names: list[NameIdea]
+
+
+class _Described(BaseModel):
+    names: list[DescribedIdea]
 
 
 def _to_wav(pcm: bytes) -> bytes:
@@ -122,11 +130,8 @@ class GeminiAI:
         }
         return self._structured(SUGGEST, payload, _Ideas).names
 
-    def describe(self, name: str, genres: list[str]) -> NameIdea:
-        ideas = self._structured(DESCRIBE, {"name": name, "genres": genres}, _Ideas).names
-        if not ideas:
-            raise AIError(UNAVAILABLE)
-        return ideas[0]
+    def describe_many(self, names: list[str], genres: list[str]) -> list[DescribedIdea]:
+        return self._structured(DESCRIBE, {"names": names, "genres": genres}, _Described).names
 
     def speak(self, text: str) -> bytes:
         response = self._generate(

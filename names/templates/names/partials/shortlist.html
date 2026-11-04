@@ -8,7 +8,7 @@
       <div class="kept-body">
         <h3 class="name name-small">{{ name.text }}{% if surname %} <span class="surname">{{ surname }}</span>{% endif %}</h3>
         {% include "names/partials/name_details.html" %}
-        {% if name.split %}<p class="z-badge split">Talk about this one: one of you passed</p>{% elif name.both_parents_love %}<p class="z-badge both">You both love this</p>{% endif %}
+        {% if name.split %}<p class="z-badge split">Talk about this one: {{ name.partner_note|default:"one of you passed" }}</p>{% elif name.both_parents_love %}<p class="z-badge both">You both love this</p>{% elif name.partner_note %}<p class="partner-note{% if name.partner_kept %} did-keep{% endif %}">{{ name.partner_note }}</p>{% endif %}
         {% if name.variants %}
         <div class="variants">Also written:
           {% for variant in name.variants %}

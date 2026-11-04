@@ -12,7 +12,9 @@ if (BASE_DIR / ".env").exists():
 
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env.bool("DEBUG", default=False)
-ALLOWED_HOSTS = [*env.list("ALLOWED_HOSTS", default=[]), "localhost", "127.0.0.1"]
+# Never localhost in production: a request sent straight to the server must not pass as this site.
+# Health checks don't need it, because config.health answers them before any host check.
+ALLOWED_HOSTS = [*env.list("ALLOWED_HOSTS", default=[]), *(["localhost", "127.0.0.1"] if DEBUG else [])]
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
 INSTALLED_APPS = [
@@ -31,7 +33,9 @@ INSTALLED_APPS = [
     "django_htmx",
 ]
 MIDDLEWARE = [
+    "config.health.HealthCheckMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "names.middleware.CloudflareAccessMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "csp.middleware.CSPMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -102,7 +106,6 @@ ACCOUNT_EMAIL_VERIFICATION_BY_CODE_ENABLED = True
 ACCOUNT_PASSWORD_RESET_BY_CODE_ENABLED = True
 ACCOUNT_SESSION_REMEMBER = True
 ACCOUNT_EMAIL_SUBJECT_PREFIX = "Naamadeva: "
-# Set to CF-Connecting-IP behind Cloudflare so allauth's login limits see the real visitor.
 ACCOUNT_SIGNUP_FORM_CLASS = "names.forms.SignupConsentForm"
 # Google sign-up still stops at our consent form. An existing account with the same verified email is reused.
 SOCIALACCOUNT_AUTO_SIGNUP = False
@@ -120,9 +123,20 @@ SOCIALACCOUNT_PROVIDERS = {
 MFA_SUPPORTED_TYPES = ["totp", "recovery_codes"]
 ADMIN_PATH = env("ADMIN_PATH", default="manage/")
 REQUIRE_ADMIN_MFA = env.bool("REQUIRE_ADMIN_MFA", default=not DEBUG)
+# Set to CF-Connecting-IP behind Cloudflare, so every per-visitor limit sees the real visitor rather than the proxy.
+# Only safe once the server can't be reached except through Cloudflare, since anyone else could send this header.
 ALLAUTH_TRUSTED_CLIENT_IP_HEADER = env("TRUSTED_CLIENT_IP_HEADER", default=None)
+# Both set: the admin panel also checks the token Cloudflare Access signs, so reaching the server directly gets nowhere.
+CF_ACCESS_TEAM_DOMAIN = env("CF_ACCESS_TEAM_DOMAIN", default="")
+CF_ACCESS_AUD = env("CF_ACCESS_AUD", default="")
+# Both set: sign-up asks Cloudflare Turnstile whether this is a person.
+TURNSTILE_SITE_KEY = env("TURNSTILE_SITE_KEY", default="")
+TURNSTILE_SECRET_KEY = env("TURNSTILE_SECRET_KEY", default="")
+TURNSTILE_ORIGIN = "https://challenges.cloudflare.com"
 
-EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+# Everything goes through the job queue. EMAIL_DELIVERY_BACKEND is what finally sends it.
+EMAIL_BACKEND = "names.mail.QueuedEmailBackend"
+EMAIL_DELIVERY_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
 EMAIL_HOST = env("EMAIL_HOST", default="localhost")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
@@ -153,8 +167,9 @@ LOGGING = {
 # TLS terminates at Coolify's proxy, which also handles the HTTP -> HTTPS redirect.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
-SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=False)
-SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=0)
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=not DEBUG)
+# A day to begin with, because browsers can't be told to forget it. Raise to a year once HTTPS is proven.
+SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=0 if DEBUG else 86400)
 SECURE_REFERRER_POLICY = "same-origin"  # Share links are secrets: never leak them in Referer.
 
 CDN = "https://cdn.jsdelivr.net"
@@ -172,6 +187,9 @@ CONTENT_SECURITY_POLICY = {
         "form-action": [SELF, "https://accounts.google.com"],
     }
 }
+if TURNSTILE_SITE_KEY:
+    CONTENT_SECURITY_POLICY["DIRECTIVES"]["script-src"].append(TURNSTILE_ORIGIN)
+    CONTENT_SECURITY_POLICY["DIRECTIVES"]["frame-src"] = [TURNSTILE_ORIGIN]
 
 AI_BACKEND = env("AI_BACKEND", default="names.ai.gemini.GeminiAI")
 GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
@@ -181,12 +199,17 @@ GEMINI_TTS_VOICE = env("GEMINI_TTS_VOICE", default="Kore")
 GEMINI_TIMEOUT_MS = env.int("GEMINI_TIMEOUT_MS", default=20000)
 GEMINI_ATTEMPTS = env.int("GEMINI_ATTEMPTS", default=2)
 
+JOBS_EAGER = False  # Tests run background work inline.
+AI_ENRICH_BATCH_SIZE = env.int("AI_ENRICH_BATCH_SIZE", default=10)
+AI_ENRICH_BATCH_WINDOW_SECONDS = env.float("AI_ENRICH_BATCH_WINDOW_SECONDS", default=1.0)
+AI_ENRICH_NAMES_PER_HOUR = env.int("AI_ENRICH_NAMES_PER_HOUR", default=2000)
+AI_ENRICH_CALLS_PER_HOUR = env.int("AI_ENRICH_CALLS_PER_HOUR", default=200)
 AI_FREE_CALLS_PER_MONTH = env.int("AI_FREE_CALLS_PER_MONTH", default=50)
 CATALOG_SHARD_LIMIT = env.int("CATALOG_SHARD_LIMIT", default=3000)
 ACCOUNT_RETENTION_DAYS = env.int("ACCOUNT_RETENTION_DAYS", default=730)
 
 # Published in the legal pages. Change POLICY_VERSION when the policies change: everyone accepts again.
-POLICY_VERSION = "2026-11-04.2"
+POLICY_VERSION = "2026-11-04.4"
 LEGAL_ENTITY_NAME = env("LEGAL_ENTITY_NAME", default="")
 LEGAL_ADDRESS = env("LEGAL_ADDRESS", default="")
 LEGAL_JURISDICTION_CITY = env("LEGAL_JURISDICTION_CITY", default="")
@@ -196,5 +219,11 @@ GRIEVANCE_EMAIL = env("GRIEVANCE_EMAIL", default="")
 AI_RATE_PER_BOARD = env("AI_RATE_PER_BOARD", default="30/h")
 AI_RATE_GLOBAL = env("AI_RATE_GLOBAL", default="200/h")
 ADD_RATE_PER_BOARD = env("ADD_RATE_PER_BOARD", default="60/h")
+# Mobile networks in India put many households behind one address, so per-visitor limits stay generous.
+AI_RATE_PER_IP = env("AI_RATE_PER_IP", default="60/h")
+ADD_RATE_PER_IP = env("ADD_RATE_PER_IP", default="60/h")
 BOARD_CREATE_RATE = env("BOARD_CREATE_RATE", default="60/h")
+BOARD_CREATE_PER_USER = env("BOARD_CREATE_PER_USER", default="20/h")
+BOARD_RATE_PER_IP = env("BOARD_RATE_PER_IP", default="300/m")
+GUEST_VOTERS_PER_IP = env("GUEST_VOTERS_PER_IP", default="30/h")
 RATELIMIT_VIEW = "names.views.rate_limited"

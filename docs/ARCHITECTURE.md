@@ -81,6 +81,44 @@ sequenceDiagram
   end
 ```
 
+## Background work
+
+Nothing talks to a third party while a person waits, except the Google sign-in callback, which has to finish before the page can load. Jobs are rows in the database and run on thread pools inside each web process (`names/jobs.py`). Email and LLM have separate pools, so a slow LLM call can't delay a sign-in code.
+
+| Work | Person sees | Then |
+|---|---|---|
+| Sign-up or reset email | The next page at once | Sent, with up to 5 tries. The row is deleted on success |
+| Tags and meaning for a name | The card at once, with details filling in | Polls every 2 seconds |
+| "Ask AI" | Keeps swiping | Cards join the deck when ready |
+| Family ideas | Catalogue ideas at once | LLM ideas join them |
+| Natural voice | Device voice is instant; this shows "Preparing…" | Plays when ready |
+
+## How insights are cached and batched
+
+```mermaid
+flowchart LR
+  add["Name added, any family"] --> norm["Normalise to a key"]
+  norm --> cache{"In the catalogue?"}
+  cache -- yes --> card["Card filled at once, no LLM"]
+  cache -- no --> stub["Waiting entry, unique per key"]
+  stub --> batch["One LLM call per unreviewed name, or up to 10 approved names"]
+  batch --> store["Saved for every family"]
+  store --> alias["New spelling saved as an alias"]
+  store --> fill["Fills every waiting card"]
+```
+
+Because the waiting entry is unique per key, a thousand parents asking about one new name cause one lookup. Only that name is sent, and text that doesn't look like a name is refused at the form, so answers are safe to share. Names no person has approved never share a prompt, so one family's text can't steer the answer about another's name.
+
+Suggestions are different, because a family's own description shapes them. Their text only reaches that family. The names they return wait in the catalogue for review, and until an admin approves one, another family asking about it gets a fresh answer of its own.
+
+## How names are normalised
+
+1. **Rules:** `dedup.phonetic_key` handles Unicode forms, invisible joiners, nine Indic scripts, Urdu and Latin spelling folds.
+2. **Learned aliases:** `catalog.canonical_key` follows spellings the LLM or admins have linked to an entry.
+3. **Close matches:** `dedup.find_duplicate` uses spelling distance and consonant outlines. These only ever ask the person.
+
+What someone typed is kept. A name typed in a script gets its Latin spelling once known, with the typed form as its native spelling.
+
 ## Where each thing runs
 
 | Concern | Runs on | Why |
@@ -115,16 +153,23 @@ sequenceDiagram
 
 Descriptions and family names never reach the shared catalogue. `describe` calls send only the name, so their answers are safe to reuse across families.
 
+Assume someone will try to give the model instructions through any of this, and that it may obey. So:
+
+- It has no tools or secrets to misuse.
+- Family ideas are read by relatives, so their prompt holds only what relatives can already see, and no text a relative typed.
+- Answers lose any field holding a link or phone number, and anything that doesn't look like a name is dropped.
+- A recording is shared by key, so only text that sounds like that key is ever spoken.
+
 ## How decisions work
 
-Each parent swipes privately. `Name.settle()` turns those swipes into a status:
+Each parent swipes, and sees the other's decision on the card. Browsers check for changes every 15 seconds. `Name.settle()` turns swipes into a status:
 
 | Parent A | Parent B | Result |
 |---|---|---|
 | Keep | Keep | Shortlist, "You both love this" |
-| Keep | Not yet | On A's shortlist, in B's deck |
+| Keep | Not yet | On both shortlists, in B's deck marked "A kept this" |
 | Keep | Pass | Shortlist for both as "Talk about this one", hidden from family |
-| Pass | Not yet | In B's deck |
+| Pass | Not yet | In B's deck marked "A passed on this" |
 | Pass | Pass | Bin, and can be brought back |
 
 A solo parent's pass bins a name, but if a partner joins later, that name returns for them to decide.

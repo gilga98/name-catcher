@@ -1,7 +1,8 @@
 {% for name in queue %}
-<article class="name-card" data-undo-url="{% url 'undo' token name.pk %}">
+<article class="name-card" data-card-id="{{ name.pk }}" data-undo-url="{% url 'undo' token name.pk %}">
   <span class="stamp stamp-keep" aria-hidden="true">Keep</span>
   <span class="stamp stamp-pass" aria-hidden="true">Pass</span>
+  <p class="partner-note{% if name.partner_kept %} did-keep{% elif name.partner_passed %} did-pass{% endif %}" data-partner-note>{{ name.partner_note }}</p>
   <h3 class="name">{{ name.text }}{% if surname %} <span class="surname">{{ surname }}</span>{% endif %}</h3>
   {% include "names/partials/name_details.html" %}
   {% if name.suggested_by %}<p class="meta">Suggested by {{ name.suggested_by }}.</p>{% endif %}

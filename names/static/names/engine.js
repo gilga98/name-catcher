@@ -116,7 +116,7 @@
       return;
     }
     if (state.aiAllowed) {
-      htmx.ajax("POST", button.dataset.moreUrl, { target: "#review", swap: "afterbegin", indicator: "#thinking" });
+      htmx.ajax("POST", button.dataset.moreUrl, { target: "#ai-status", swap: "innerHTML" });
     } else {
       offerAI();
     }

@@ -28,6 +28,12 @@ class NameIdea(BaseModel):
     surname_fit: str
 
 
+class DescribedIdea(NameIdea):
+    """`given` is the input echoed back, so answers in a batch can be matched to their names."""
+
+    given: str
+
+
 @dataclass(frozen=True)
 class SuggestionRequest:
     """`brief` must come from `ai.context.brief_for_llm`, which decides what may leave our side."""
@@ -44,7 +50,7 @@ class SuggestionRequest:
 class NameSuggester(Protocol):
     def suggest(self, request: SuggestionRequest) -> list[NameIdea]: ...
 
-    def describe(self, name: str, genres: list[str]) -> NameIdea: ...
+    def describe_many(self, names: list[str], genres: list[str]) -> list[DescribedIdea]: ...
 
 
 class Speaker(Protocol):

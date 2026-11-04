@@ -11,5 +11,5 @@
 {% elif no_details %}
 <p class="hint">This one isn't in our catalogue yet.</p>
 {% else %}
-<button class="z-button z-button-text z-button-small" type="button" hx-post="{% url 'details' token name.pk %}" hx-trigger="load, click" hx-swap="outerHTML" hx-disabled-elt="this">Adding tags and meaning…</button>
+<p class="thinking" role="status" hx-post="{% url 'details' token name.pk %}" hx-trigger="every 2s" hx-swap="outerHTML">Adding tags and meaning…</p>
 {% endif %}

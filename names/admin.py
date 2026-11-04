@@ -4,7 +4,7 @@ from allauth.account.decorators import secure_admin_login
 from allauth.mfa.utils import is_mfa_enabled
 from django.conf import settings
 from django.contrib import admin, messages
-from django.db.models import Count
+from django.db.models import Count, Sum
 from django.shortcuts import redirect, render
 from django.urls import path, reverse
 from django.utils import timezone
@@ -12,7 +12,7 @@ from django.utils import timezone
 from . import catalog
 from .dedup import phonetic_key
 from .forms import CatalogUploadForm
-from .models import AICall, Board, CatalogName, ConsentRecord, Genre, Name
+from .models import AICall, Board, CatalogName, ConsentRecord, Genre, Job, Name, NameAlias
 
 admin.site.site_header = "Naamadeva admin"
 admin.site.site_title = "Naamadeva admin"
@@ -48,7 +48,13 @@ def overview() -> dict:
         "pending": CatalogName.objects.filter(status=CatalogName.Status.PENDING).count(),
         "approved": CatalogName.objects.filter(status=CatalogName.Status.APPROVED).count(),
         "llm_calls": AICall.objects.filter(created_at__gte=month).count(),
-        "llm_by_kind": AICall.objects.filter(created_at__gte=month).values("kind").annotate(total=Count("pk")),
+        "llm_by_kind": AICall.objects.filter(created_at__gte=month)
+        .values("kind")
+        .annotate(total=Count("pk"), names=Sum("units")),
+        "insights_cached": CatalogName.objects.filter(enrich_state=CatalogName.Enrich.DONE).count(),
+        "aliases": NameAlias.objects.count(),
+        "jobs_waiting": Job.objects.filter(status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).count(),
+        "jobs_failed": Job.objects.filter(status=Job.Status.FAILED).count(),
         "catalog_share": round(100 * from_catalog / (from_catalog + from_llm)) if from_catalog + from_llm else None,
     }
 
@@ -89,20 +95,28 @@ class GenreAdmin(admin.ModelAdmin):
         return genre.total
 
 
+class NameAliasInline(admin.TabularInline):
+    model = NameAlias
+    extra = 0
+
+
 @admin.register(CatalogName)
 class CatalogNameAdmin(admin.ModelAdmin):
+    inlines = [NameAliasInline]
     change_list_template = "admin/names/catalogname/change_list.html"
     list_display = ["text", "native", "origin", "gender", "rarity", "status", "source", "submissions", "picks"]
     list_filter = ["status", "source", "rarity", "gender", "origin", "genres"]
     search_fields = ["text", "native", "meaning", "key"]
     filter_horizontal = ["genres"]
-    readonly_fields = ["key", "source", "submitted_by", "submissions", "picks", "updated_at"]
+    readonly_fields = ["key", "source", "submitted_by", "submissions", "picks", "updated_at", "enrich_state"]
+    exclude = ["enrich_attempts", "enrich_claimed_at"]
     actions = ["approve", "reject"]
     ordering = ["-submissions", "text"]
 
     @admin.action(description="Approve selected names")
     def approve(self, request, queryset) -> None:
         self.message_user(request, f"{queryset.update(status=CatalogName.Status.APPROVED)} names approved.")
+        catalog.queue_blank_entries(queryset)
 
     @admin.action(description="Reject selected names")
     def reject(self, request, queryset) -> None:
@@ -142,9 +156,18 @@ class CatalogNameAdmin(admin.ModelAdmin):
             row_limit=50000,
         )
         result = catalog.import_rows(data["file"], options)
+        catalog.queue_blank_entries(CatalogName.objects.filter(status=CatalogName.Status.APPROVED))
         self.message_user(request, f"{result.created} added, {result.merged} merged into existing names.")
         for error in result.errors[:20]:
             self.message_user(request, error, messages.WARNING)
+
+
+@admin.register(Job)
+class JobAdmin(ReadOnlyAdmin):
+    """Without payloads, which can hold email addresses and sign-in codes."""
+
+    fields = list_display = ["created_at", "queue", "kind", "status", "attempts", "updated_at"]
+    list_filter = ["queue", "kind", "status"]
 
 
 @admin.register(ConsentRecord)

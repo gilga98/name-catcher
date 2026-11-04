@@ -91,6 +91,49 @@
   });
   refresh();
 
+  // Keeps two parents in step without a reload: their decisions, and names that reach the deck meanwhile.
+  const SYNC_MS = 15000;
+  let inFlight = 0;
+  let lastStamp = null;
+  document.body.addEventListener("htmx:beforeRequest", () => { inFlight++; });
+  document.body.addEventListener("htmx:afterRequest", () => { inFlight--; });
+
+  function showNote(card, note) {
+    const element = card.querySelector("[data-partner-note]");
+    element.textContent = note.text;
+    element.classList.toggle("did-keep", Boolean(note.text) && note.kept);
+    element.classList.toggle("did-pass", Boolean(note.text) && !note.kept);
+  }
+
+  async function sync() {
+    // Anything mid-flight could look like a new card, or be replaced under someone's finger.
+    if (document.hidden || drag || inFlight || review.querySelector(".fly-left, .fly-right")) return;
+    let body;
+    try {
+      body = await (await fetch(review.dataset.decisionsUrl)).json();
+    } catch {
+      return; // Offline for a moment. The next round catches up.
+    }
+    const fresh = [];
+    Object.entries(body.notes).forEach(([id, note]) => {
+      const card = review.querySelector(`[data-card-id="${id}"]`);
+      if (card) showNote(card, note);
+      else fresh.push(id);
+    });
+    if (fresh.length) {
+      const query = fresh.map((id) => `id=${id}`).join("&");
+      htmx.ajax("GET", `${review.dataset.cardsUrl}?${query}`, { target: "#review", swap: "beforeend" });
+    }
+    const pressing = document.querySelector("#shortlist:active");
+    if (lastStamp !== null && body.stamp !== lastStamp && !pressing) {
+      htmx.ajax("GET", review.dataset.shortlistUrl, { target: "#shortlist", swap: "outerHTML" });
+    }
+    if (!pressing) lastStamp = body.stamp;
+  }
+
+  setInterval(sync, SYNC_MS);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) sync(); });
+
   // Baby photo. It's only ever kept in this browser, so nothing about the child reaches our servers.
   const input = document.getElementById("baby-photo-input");
   const remove = document.getElementById("baby-photo-remove");

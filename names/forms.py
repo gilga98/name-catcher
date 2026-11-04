@@ -1,9 +1,13 @@
 from django import forms
+from django.conf import settings
 from django.core.validators import RegexValidator
 from django.urls import reverse
 from django.utils.html import format_html
 
+from . import turnstile
 from .catalog import themes_from_text
+from .dedup import clean as clean_spacing
+from .dedup import looks_like_name, phonetic_key
 from .models import Genre, Profile
 
 GENDERS = [("any", "Open to any"), ("girl", "Girl"), ("boy", "Boy"), ("neutral", "Gender-neutral")]
@@ -53,7 +57,18 @@ class AddNameForm(forms.Form):
         strip=True,
         validators=[RegexValidator(r"[\d<>/:@]", "Enter just the name.", inverse_match=True)],
     )
-    by = forms.CharField(max_length=40, required=False, strip=True)
+    by = forms.CharField(
+        max_length=40,
+        required=False,
+        strip=True,
+        validators=[RegexValidator(r"[\d<>/:@.]", "Enter just your name.", inverse_match=True)],
+    )
+
+    def clean_text(self) -> str:
+        text = clean_spacing(self.cleaned_data["text"])
+        if not phonetic_key(text) or not looks_like_name(text):
+            raise forms.ValidationError("Enter just the name.")  # Symbols have no sound; sentences aren't names.
+        return text
 
 
 class SignupConsentForm(forms.Form):
@@ -70,6 +85,14 @@ class SignupConsentForm(forms.Form):
             reverse("privacy"),
             reverse("terms"),
         )
+        if settings.TURNSTILE_SECRET_KEY and settings.TURNSTILE_SITE_KEY:
+            self.fields["turnstile"] = forms.CharField(required=False, label="", widget=turnstile.TurnstileWidget)
+
+    def clean(self):
+        cleaned = super().clean()
+        if "turnstile" in self.fields and not turnstile.is_person(self.data.get(turnstile.RESPONSE_FIELD, "")):
+            raise forms.ValidationError("We couldn't confirm you're a person. Please try again.")
+        return cleaned
 
     def signup(self, request, user) -> None:
         from .accounts import record_consent
