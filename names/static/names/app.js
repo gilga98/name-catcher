@@ -12,23 +12,55 @@ function errorMessage(contentType, body) {
   return (contentType || "").startsWith("text/plain") ? body : SOMETHING_WENT_WRONG;
 }
 
-function hasVoiceFor(lang) {
-  const voices = speechSynthesis.getVoices();
-  const language = lang.split("-")[0];
-  return !voices.length || voices.some((voice) => voice.lang.replace("_", "-").startsWith(language));
-}
-
 const FALLBACK_VOICE = "en-IN";
+const VOICE_START_MS = 3000;
+const NO_SOUND = "This device couldn't read the name aloud. Check that its speech voices are installed.";
 
-// Asked early because the first answer can come back empty. A device with no voice for this language would stay silent.
+// Asked early because the first answer can come back empty.
 window.speechSynthesis?.getVoices();
 
-function say(button) {
-  const inLanguage = hasVoiceFor(button.dataset.lang);
-  const utterance = new SpeechSynthesisUtterance(inLanguage ? button.dataset.say : button.dataset.fallback);
-  utterance.lang = inLanguage ? button.dataset.lang : FALLBACK_VOICE;
-  speechSynthesis.cancel();
+// The device's own voices come first, because online ones can stay silent without reporting an error.
+function voiceFor(lang) {
+  const language = lang.split("-")[0];
+  const tag = (voice) => voice.lang.replace("_", "-");
+  const matching = speechSynthesis.getVoices().filter((voice) => tag(voice).split("-")[0] === language);
+  return matching.find((voice) => voice.localService && tag(voice) === lang)
+    || matching.find((voice) => voice.localService)
+    || matching[0];
+}
+
+let voiceTimer;
+
+// Some voices fail with an error and others never start, so both count as silence. A newer tap cancels this one, which isn't.
+function speak(text, lang, voice, onSilent) {
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = lang;
+  if (voice) utterance.voice = voice;
+  const silent = () => {
+    clearTimeout(voiceTimer);
+    speechSynthesis.cancel();
+    onSilent();
+  };
+  utterance.addEventListener("start", () => clearTimeout(voiceTimer));
+  utterance.addEventListener("error", (event) => {
+    if (event.error !== "canceled" && event.error !== "interrupted") silent();
+  });
+  voiceTimer = setTimeout(silent, VOICE_START_MS);
   speechSynthesis.speak(utterance);
+}
+
+function say(button) {
+  if (!window.speechSynthesis) {
+    toast(NO_SOUND);
+    return;
+  }
+  clearTimeout(voiceTimer);
+  speechSynthesis.cancel();
+  speechSynthesis.resume(); // Some browsers stay paused after the page has been in the background.
+  const spelled = () => speak(button.dataset.fallback, FALLBACK_VOICE, voiceFor(FALLBACK_VOICE), () => toast(NO_SOUND));
+  const voice = voiceFor(button.dataset.lang);
+  if (voice) speak(button.dataset.say, button.dataset.lang, voice, spelled);
+  else spelled();
 }
 
 const COPIED_MS = 2000;
