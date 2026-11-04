@@ -141,7 +141,6 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 MFA_SUPPORTED_TYPES = ["totp", "recovery_codes"]
 ADMIN_PATH = env("ADMIN_PATH", default="manage/")
-REQUIRE_ADMIN_MFA = env.bool("REQUIRE_ADMIN_MFA", default=not DEBUG)
 # Set to CF-Connecting-IP behind Cloudflare, so every per-visitor limit sees the real visitor rather than the proxy.
 # Only safe once the server can't be reached except through Cloudflare, since anyone else could send this header.
 ALLAUTH_TRUSTED_CLIENT_IP_HEADER = env("TRUSTED_CLIENT_IP_HEADER", default=None)

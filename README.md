@@ -31,7 +31,6 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 | `LEGAL_ENTITY_NAME`, `LEGAL_ADDRESS`, `LEGAL_JURISDICTION_CITY`, `GRIEVANCE_OFFICER_NAME`, `GRIEVANCE_EMAIL` | Yes | Published in the legal pages, which show a visible placeholder until set. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | No | Shows "Continue with Google". The redirect URI is `https://<domain>/accounts/google/login/callback/`. |
 | `ADMIN_PATH` | No | Where the admin panel lives. Defaults to `manage/`. |
-| `REQUIRE_ADMIN_MFA` | No | Staff need two-factor sign-in for the admin panel. On unless `DEBUG`. |
 | `AI_ENRICH_BATCH_SIZE`, `AI_ENRICH_BATCH_WINDOW_SECONDS`, `AI_ENRICH_NAMES_PER_HOUR`, `AI_ENRICH_CALLS_PER_HOUR` | No | Approved names per LLM call, how long to wait to fill a batch, and the hourly caps on names and calls for tagging. Unreviewed names always get a call of their own. |
 | `AI_FREE_CALLS_PER_MONTH`, `CATALOG_SHARD_LIMIT`, `ACCOUNT_RETENTION_DAYS` | No | LLM allowance per parent, names per browser shard, days before an idle account is deleted. |
 | `TRUSTED_CLIENT_IP_HEADER` | Yes, behind Cloudflare | `CF-Connecting-IP`, so limits apply per visitor. Only safe once the server is reachable solely through Cloudflare, because anyone else could send this header. |
@@ -52,7 +51,7 @@ Before launch, `python manage.py check --deploy` should list no `names.W` warnin
 
 ## Admin
 
-Create a staff user with `python manage.py createsuperuser`, then open `/manage/`. Staff set up two-factor sign-in on first visit. Upload names as a CSV at **Catalog names > Upload names**. Family boards show counts only, by design.
+Create a staff user with `python manage.py createsuperuser`, then open `/manage/` and sign in with that username and password. Upload names as a CSV at **Catalog names > Upload names**. Family boards show counts only, by design.
 
 ## Access
 

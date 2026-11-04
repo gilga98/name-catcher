@@ -1,7 +1,5 @@
 """The operator's panel. Family boards are deliberately absent: staff run the service, they don't read private lists."""
 
-from allauth.mfa.utils import is_mfa_enabled
-from django.conf import settings
 from django.contrib import admin, messages
 from django.db.models import Count, Sum
 from django.shortcuts import redirect, render
@@ -18,23 +16,7 @@ admin.site.site_title = "Naamadeva admin"
 admin.site.index_title = "Overview"
 admin.site.index_template = "admin/names_index.html"
 
-_has_permission = admin.site.has_permission
-_login = admin.site.login
 _index = admin.site.index
-
-
-def _has_permission_with_mfa(request) -> bool:
-    if not _has_permission(request):
-        return False
-    return not settings.REQUIRE_ADMIN_MFA or is_mfa_enabled(request.user)
-
-
-def _admin_login(request, extra_context=None):
-    user = request.user
-    if settings.REQUIRE_ADMIN_MFA and user.is_authenticated and user.is_staff and not is_mfa_enabled(user):
-        messages.info(request, "Set up two-factor sign-in to open the admin panel.")
-        return redirect("mfa_index")
-    return _login(request, extra_context)
 
 
 def overview() -> dict:
@@ -62,8 +44,6 @@ def _admin_index(request, extra_context=None):
     return _index(request, {**(extra_context or {}), "overview": overview()})
 
 
-admin.site.has_permission = _has_permission_with_mfa
-admin.site.login = _admin_login
 admin.site.index = _admin_index
 
 

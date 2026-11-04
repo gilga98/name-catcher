@@ -306,10 +306,12 @@ def test_admin_cannot_see_inside_family_boards(staff, board):
     assert staff.get("/manage/names/name/").status_code == 404
 
 
-@override_settings(REQUIRE_ADMIN_MFA=True)
-def test_admin_requires_two_factor_when_enforced(staff):
-    response = staff.get(reverse("admin:index"), follow=True)
-    assert response.redirect_chain[-1][0] == reverse("mfa_index")
+def test_admin_opens_with_just_username_and_password(client):
+    get_user_model().objects.create_superuser("adminuser", "", "secret")
+    login = client.get(reverse("admin:index"), follow=True).redirect_chain[-1][0]
+    response = client.post(login, {"username": "adminuser", "password": "secret"}, follow=True)
+    assert response.redirect_chain[-1][0] == reverse("admin:index")
+    assert response.status_code == 200
 
 
 def test_non_staff_cannot_reach_admin(client):
