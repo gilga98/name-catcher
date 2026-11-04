@@ -267,9 +267,6 @@ main form.tune-form .step-q, .tune-form .field legend.step-q { font-size: 1.25re
 .say-button { display: inline-grid; place-items: center; width: 2.5rem; height: 2.5rem; padding: 0; border: 0; border-radius: 50%; background: var(--petal); color: var(--plum); cursor: pointer; }
 .say-button[hidden] { display: none; }
 .say-button:hover { background: var(--mauve); color: var(--paper); }
-.say-button.is-busy { animation: pulse 1s ease-in-out infinite; }
-.say-button.is-ready { outline: 2px solid var(--marigold); outline-offset: 2px; }
-@keyframes pulse { 50% { opacity: .4; } }
 .respelling { font-weight: 600; font-size: .875rem; letter-spacing: .02em; margin-left: .25rem; }
 .syllables { display: inline-flex; gap: .1875rem; margin-left: .25rem; }
 .syllables i { width: .4375rem; height: .4375rem; border-radius: 50%; background: var(--marigold); }
@@ -399,6 +396,7 @@ main form.tune-form .step-q, .tune-form .field legend.step-q { font-size: 1.25re
 .ideas li { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .25s ease, margin-bottom .25s ease, opacity .25s ease; }
 .ideas li > .idea { min-height: 0; overflow: hidden; }
 .ideas li.is-leaving { grid-template-rows: 0fr; margin-bottom: -.5rem; opacity: 0; }
+.ideas-refresh { margin-top: .5rem; }
 .idea-text { flex: 1; min-width: 0; }
 .idea-text .idea-sent { display: none; color: var(--plum); }
 .is-sent .idea-text .idea-sent { display: block; }

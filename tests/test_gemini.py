@@ -5,12 +5,12 @@ import pytest
 from django.test import override_settings
 from google.genai import errors
 
-from names.ai.base import AIError, NameIdea, SuggestionRequest
+from names.ai.base import AIError, AIRateLimited, NameIdea, SuggestionRequest
 from names.ai.gemini import GeminiAI
 
 IDEA = NameIdea(
     name="Tara", native_script="तारा", meaning="Star", origin="Sanskrit",
-    respelling="TAA-raa", speech_lang="hi-IN", gender="girl", rarity="uncommon", style="any",
+    respelling="TAA-raa", sounds_like="taaraa", speech_lang="hi-IN", gender="girl", rarity="uncommon", style="any",
     genres=[], insight="", surname_fit="",
 )  # fmt: skip
 
@@ -73,7 +73,30 @@ def test_unparseable_reply_is_an_error(gemini):
         gemini.describe_many(["a"], [])
 
 
-def test_speech_is_wrapped_as_wav(gemini):
-    part = SimpleNamespace(inline_data=SimpleNamespace(data=b"\0\0"))
-    stub(gemini, SimpleNamespace(candidates=[SimpleNamespace(content=SimpleNamespace(parts=[part]))]))
-    assert gemini.speak("Tara")[:4] == b"RIFF"
+def test_respelling_asks_only_for_the_spelling(gemini):
+    models = stub(gemini, SimpleNamespace(parsed=SimpleNamespace(names=["answer"])))
+    assert gemini.respell_many(["Tara"]) == ["answer"]
+    assert "sounds_like" in models.calls[0]["config"].system_instruction
+
+
+def test_a_rate_limit_says_which_quota_and_nothing_else(gemini, caplog):
+    body = {
+        "error": {
+            "message": "Quota exceeded while saying Tara",
+            "details": [
+                {"violations": [{"quotaId": "PerDay-FreeTier", "quotaValue": "10", "quotaMetric": "requests"}]},
+                {"retryDelay": "3600s"},
+            ],
+        }
+    }
+    stub(gemini, errors.ClientError(429, body))
+    with pytest.raises(AIRateLimited):
+        gemini.respell_many(["Tara"])
+    assert "PerDay-FreeTier" in caplog.text and "3600s" in caplog.text
+    assert "Tara" not in caplog.text
+
+
+def test_a_rate_limit_with_an_unexpected_body_is_still_reported(gemini):
+    stub(gemini, errors.ClientError(429, ["nothing useful"]))
+    with pytest.raises(AIRateLimited):
+        gemini.respell_many(["Tara"])

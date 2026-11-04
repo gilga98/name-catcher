@@ -220,7 +220,6 @@ CONTENT_SECURITY_POLICY = {
         "font-src": [SELF, CDN_KIT, CDN_FONTS],
         "img-src": [SELF, "data:"],
         "connect-src": [SELF],
-        "media-src": [SELF, "blob:"],  # The natural voice plays from a blob, once its recording has been fetched.
         "frame-ancestors": [NONE],
         "base-uri": [SELF],
         # Chrome also applies this to redirects after a submit, which is how the Google button leaves the site.
@@ -234,8 +233,6 @@ if TURNSTILE_SITE_KEY:
 AI_BACKEND = env("AI_BACKEND", default="names.ai.gemini.GeminiAI")
 GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
 GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-3.1-flash-lite")
-GEMINI_TTS_MODEL = env("GEMINI_TTS_MODEL", default="gemini-3.8-flash-lite-tts")
-GEMINI_TTS_VOICE = env("GEMINI_TTS_VOICE", default="Kore")
 # Runs on the worker, where nobody is held up. Every attempt together must stay under jobs.LEASE.
 GEMINI_TIMEOUT_MS = env.int("GEMINI_TIMEOUT_MS", default=30000)
 GEMINI_ATTEMPTS = env.int("GEMINI_ATTEMPTS", default=2)
@@ -248,15 +245,16 @@ SOOTA_AYANAMSHA = env.int("SOOTA_AYANAMSHA", default=2)  # Lahiri, Soota's own d
 SOOTA_NUMEROLOGY_SYSTEM = env("SOOTA_NUMEROLOGY_SYSTEM", default="chaldean")  # Or pythagorean.
 
 JOBS_EAGER = False  # Tests run background work inline.
-# Recording names ahead of anyone tapping. Gemini's free tier allows few of these a day, so taps need some left over.
-AI_VOICE_PER_DAY = env.int("AI_VOICE_PER_DAY", default=60)
-AI_VOICE_SPACING_SECONDS = env.int("AI_VOICE_SPACING_SECONDS", default=20)
-AI_VOICE_PAUSE_SECONDS = env.int("AI_VOICE_PAUSE_SECONDS", default=3600)
+# Filling in spellings for names older than the question. One call covers a batch, and Gemini's free tier is small.
+AI_RESPELL_CALLS_PER_DAY = env.int("AI_RESPELL_CALLS_PER_DAY", default=20)
+AI_RESPELL_SPACING_SECONDS = env.int("AI_RESPELL_SPACING_SECONDS", default=60)
+AI_RESPELL_PAUSE_SECONDS = env.int("AI_RESPELL_PAUSE_SECONDS", default=3600)
 AI_ENRICH_BATCH_SIZE = env.int("AI_ENRICH_BATCH_SIZE", default=10)
 AI_ENRICH_BATCH_WINDOW_SECONDS = env.float("AI_ENRICH_BATCH_WINDOW_SECONDS", default=1.0)
 AI_ENRICH_NAMES_PER_HOUR = env.int("AI_ENRICH_NAMES_PER_HOUR", default=2000)
 AI_ENRICH_CALLS_PER_HOUR = env.int("AI_ENRICH_CALLS_PER_HOUR", default=200)
 AI_FREE_CALLS_PER_MONTH = env.int("AI_FREE_CALLS_PER_MONTH", default=50)
+AI_CALLS_KEPT_FOR_PARENTS = env.int("AI_CALLS_KEPT_FOR_PARENTS", default=20)
 CATALOG_SHARD_LIMIT = env.int("CATALOG_SHARD_LIMIT", default=3000)
 MAX_PENDING_CONTRIBUTIONS = env.int("MAX_PENDING_CONTRIBUTIONS", default=2000)
 ACCOUNT_RETENTION_DAYS = env.int("ACCOUNT_RETENTION_DAYS", default=730)
@@ -271,6 +269,7 @@ GRIEVANCE_EMAIL = env("GRIEVANCE_EMAIL", default="")
 
 AI_RATE_PER_BOARD = env("AI_RATE_PER_BOARD", default="30/h")
 AI_RATE_GLOBAL = env("AI_RATE_GLOBAL", default="200/h")
+FAMILY_REFRESH_RATE = env("FAMILY_REFRESH_RATE", default="10/d")
 ADD_RATE_PER_BOARD = env("ADD_RATE_PER_BOARD", default="60/h")
 # Mobile networks in India put many households behind one address, so per-visitor limits stay generous.
 AI_RATE_PER_IP = env("AI_RATE_PER_IP", default="60/h")

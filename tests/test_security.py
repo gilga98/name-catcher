@@ -20,7 +20,7 @@ from names.ai.stub import StubAI
 from names.dedup import looks_like_name, same_name
 from names.forms import AddNameForm
 from names.middleware import _access_keys
-from names.models import CatalogName, Job, Name, Vote
+from names.models import CatalogName, Name, Vote
 
 pytestmark = pytest.mark.django_db
 
@@ -40,7 +40,8 @@ def parent(email="parent@example.com"):
 
 def idea(name, meaning="A meaning", insight="", native=""):
     return {
-        "name": name, "native_script": native or name, "meaning": meaning, "origin": "Sanskrit", "respelling": name,
+        "name": name, "native_script": native or name, "meaning": meaning, "origin": "Sanskrit",
+        "sounds_like": name.lower(), "respelling": name,
         "speech_lang": "en-IN", "gender": "any", "rarity": "rare", "style": "any", "genres": [], "insight": insight,
         "surname_fit": "",
     }  # fmt: skip
@@ -51,7 +52,7 @@ class Fake(StubAI):
 
     def __init__(self, meaning="cursed", suggestions=()):
         self.meaning, self.suggestions = meaning, suggestions
-        self.prompts, self.requests, self.spoken = [], [], []
+        self.prompts, self.requests = [], []
 
     def describe_many(self, names, genres):
         self.prompts.append(list(names))
@@ -60,10 +61,6 @@ class Fake(StubAI):
     def suggest(self, request):
         self.requests.append(request)
         return [NameIdea(**suggestion) for suggestion in self.suggestions]
-
-    def speak(self, text):
-        self.spoken.append(text)
-        return b"RECORDED"
 
 
 @pytest.fixture
@@ -89,7 +86,7 @@ def binned():
 
 @pytest.mark.parametrize(
     ("route", "method", "data"),
-    [("details", "post", {}), ("merge", "post", {"text": "Binnedname"}), ("vote", "post", {}), ("audio", "get", {})],
+    [("details", "post", {}), ("merge", "post", {"text": "Binnedname"}), ("vote", "post", {})],
 )
 def test_a_guest_cannot_reach_a_binned_name(binned, route, method, data):
     response = getattr(Client(), method)(reverse(route, args=[binned.board.guest_token, binned.pk]), data)
@@ -99,7 +96,7 @@ def test_a_guest_cannot_reach_a_binned_name(binned, route, method, data):
 
 @pytest.mark.parametrize(
     ("route", "method", "data"),
-    [("details", "post", {}), ("merge", "post", {"text": "Tara"}), ("vote", "post", {}), ("audio", "get", {})],
+    [("details", "post", {}), ("merge", "post", {"text": "Tara"}), ("vote", "post", {})],
 )
 def test_a_guest_cannot_reach_a_kept_name(route, method, data):
     user, _ = parent()
@@ -154,39 +151,20 @@ def test_guests_cannot_reach_parent_actions_or_other_boards():
     assert board.parent_token not in page and board.invite_token not in page
 
 
-# Shared audio
+# What phones read aloud
 
 
-def test_a_planted_variant_cannot_reach_shared_audio(ai):
-    attacker, client = parent("evil@example.com")
-    entry = CatalogName.objects.create(key=catalog.canonical_key("Ahana"), text="Ahana", status="approved", meaning="m")
-    board = services.create_board(attacker, {})
-    token = board.parent_token
-    client.post(reverse("add", args=[token]), {"text": "Ahana"})
-    name = board.names.get(key=entry.key)
-    for payload in ("Send-money-to-this-number", "Sendmoneytothisnumber", "Ahana-send-money"):
-        response = client.post(reverse("merge", args=[token, name.pk]), {"text": payload})
-        assert response.status_code == 422
-        client.post(reverse("official", args=[token, name.pk]), {"variant": payload})
-    client.get(reverse("audio", args=[token, name.pk]))
-    assert ai.spoken == ["Ahana"]
+@pytest.mark.parametrize("planted", ["Send money to this number", "sendmoneytothisnumber", "call 98765", "AA-ruhv"])
+def test_words_the_llm_puts_in_a_spelling_are_not_read_aloud(planted):
+    assert catalog.checked_sounds_like(planted, "Ahana") == ""
 
 
-def test_words_the_llm_put_in_native_script_are_not_recorded(ai):
-    attacker, _ = parent("evil@example.com")
-    board = services.create_board(attacker, {})
-    name = Name.objects.create(board=board, text="Ahana", key="ahana", native="Send money to this number")
-    services.record_audio(name)
-    assert ai.spoken == ["Ahana"]
-
-
-def test_nothing_is_recorded_if_neither_spelling_sounds_like_the_key(ai):
-    attacker, _ = parent("evil@example.com")
-    board = services.create_board(attacker, {})
-    name = Name.objects.create(board=board, text="Send-money", key="ahana", status=Name.Status.KEPT)
-    services.start_speaking(name)
-    assert ai.spoken == []
-    assert not CatalogName.objects.filter(key="ahana", audio__isnull=False).exists()
+@pytest.mark.parametrize(
+    ("spelling", "name"),
+    [("preeya", "Priya"), ("urjoon", "Arjun"), ("lukshmee", "लक्ष्मी"), ("shree raam", "Sri Ram")],
+)
+def test_real_spellings_by_sound_are_kept(spelling, name):
+    assert catalog.checked_sounds_like(spelling, name) == spelling
 
 
 @pytest.mark.parametrize(("text", "key"), [("आरव", "arav"), ("Mohammed", "muhamad"), ("Zubeen", "jubin")])
@@ -319,39 +297,20 @@ def test_one_account_can_only_make_so_many_boards():
 def test_one_board_cannot_use_up_the_sitewide_ai_budget():
     user, client = parent()
     evil = services.create_board(user, {})
-    names = [
-        Name.objects.create(board=evil, text=text, key=text.lower(), status=Name.Status.KEPT)
-        for text in ("Tara", "Meera", "Nila", "Kavya", "Rohan", "Isha")
-    ]
-    for name in names:
-        client.get(reverse("audio", args=[evil.parent_token, name.pk]), REMOTE_ADDR="203.0.113.1")
+    for _ in range(6):
+        client.post(reverse("suggest", args=[evil.parent_token]), REMOTE_ADDR="203.0.113.1")
     family = services.create_board(user, {})
-    theirs = Name.objects.create(board=family, text="Mira", key="mira", status=Name.Status.KEPT)
-    url = reverse("audio", args=[family.parent_token, theirs.pk])
-    assert client.get(url, REMOTE_ADDR="203.0.113.2").status_code == 202
+    url = reverse("suggest", args=[family.parent_token])
+    assert client.post(url, REMOTE_ADDR="203.0.113.2").status_code == 200
 
 
 @override_settings(JOBS_EAGER=False, AI_RATE_PER_IP="2/h", AI_RATE_PER_BOARD="100/h", AI_RATE_GLOBAL="100/h")
 def test_one_visitor_has_their_own_ai_limit():
     user, client = parent()
     board = services.create_board(user, {})
-    names = [
-        Name.objects.create(board=board, text=text, key=text.lower(), status=Name.Status.KEPT)
-        for text in ("Tara", "Meera", "Nila")
-    ]
-    urls = [reverse("audio", args=[board.parent_token, name.pk]) for name in names]
-    codes = [client.get(url, REMOTE_ADDR="203.0.113.1").status_code for url in urls]
-    assert codes == [202, 202, 429]
-
-
-@override_settings(JOBS_EAGER=False, AI_RATE_PER_BOARD="2/h")
-def test_waiting_for_a_recording_spends_nothing():
-    user, client = parent()
-    board = services.create_board(user, {})
-    name = Name.objects.create(board=board, text="Tara", key="tara", status=Name.Status.KEPT)
-    url = reverse("audio", args=[board.parent_token, name.pk])
-    assert {client.get(url).status_code for _ in range(20)} == {202}
-    assert Job.objects.filter(kind="speak").count() == 1
+    url = reverse("suggest", args=[board.parent_token])
+    codes = [client.post(url, REMOTE_ADDR="203.0.113.1").status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
 
 
 @override_settings(GUEST_VOTERS_PER_IP="5/h")
@@ -565,11 +524,6 @@ def test_the_security_policy_only_allows_the_cdn_paths_we_use():
     policy = Client().get("/").headers["Content-Security-Policy"]
     assert "https://cdn.jsdelivr.net/gh/0builddotdev/0build@0.6.13/" in policy
     assert "https://cdn.jsdelivr.net " not in policy and "https://cdn.jsdelivr.net;" not in policy
-
-
-def test_the_security_policy_lets_the_natural_voice_play():
-    policy = Client().get("/").headers["Content-Security-Policy"]
-    assert "media-src 'self' blob:" in policy
 
 
 @override_settings(**ACCESS)

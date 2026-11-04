@@ -18,54 +18,17 @@ function hasVoiceFor(lang) {
   return !voices.length || voices.some((voice) => voice.lang.replace("_", "-").startsWith(language));
 }
 
-// The device's voice is free and instant, so only fall back to the paid one when it can't say the name.
+const FALLBACK_VOICE = "en-IN";
+
+// Asked early because the first answer can come back empty. A device with no voice for this language would stay silent.
+window.speechSynthesis?.getVoices();
+
 function say(button) {
-  const lang = button.dataset.lang || "en-IN";
-  const paid = button.parentElement.querySelector("[data-audio]");
-  if (paid && !hasVoiceFor(lang)) {
-    playAudio(paid);
-    return;
-  }
-  const utterance = new SpeechSynthesisUtterance(button.dataset.say);
-  utterance.lang = button.dataset.lang || "en-IN";
+  const inLanguage = hasVoiceFor(button.dataset.lang);
+  const utterance = new SpeechSynthesisUtterance(inLanguage ? button.dataset.say : button.dataset.fallback);
+  utterance.lang = inLanguage ? button.dataset.lang : FALLBACK_VOICE;
   speechSynthesis.cancel();
   speechSynthesis.speak(utterance);
-}
-
-const VOICE_WAIT_MS = 1500;
-const VOICE_ATTEMPTS = 20;
-
-// The server records in the background and answers 202 until it's ready.
-async function fetchVoice(url) {
-  for (let attempt = 0; attempt < VOICE_ATTEMPTS; attempt++) {
-    const response = await fetch(url);
-    if (response.status === 200) return response.blob();
-    if (response.status !== 202) throw new Error(errorMessage(response.headers.get("Content-Type"), await response.text()));
-    await new Promise((resolve) => setTimeout(resolve, VOICE_WAIT_MS));
-  }
-  throw new Error("The natural voice is taking too long. Try your device's voice.");
-}
-
-async function playAudio(button) {
-  button.classList.remove("is-ready");
-  if (button.dataset.ready) {
-    new Audio(button.dataset.ready).play();
-    return;
-  }
-  button.disabled = true;
-  button.classList.add("is-busy");
-  try {
-    const source = URL.createObjectURL(await fetchVoice(button.dataset.audio));
-    button.dataset.ready = source;
-    await new Audio(source).play();
-  } catch (error) {
-    // Browsers may block sound that starts long after the tap. The recording is ready for the next one.
-    if (error.name === "NotAllowedError") button.classList.add("is-ready");
-    else toast(error.message);
-  } finally {
-    button.disabled = false;
-    button.classList.remove("is-busy");
-  }
 }
 
 const COPIED_MS = 2000;
@@ -182,10 +145,9 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-dismiss-cookies]")) dismissCookieNotice();
   const sound = event.target.closest("[data-sound]");
   if (sound) document.querySelector("[data-starts-with]").value = sound.dataset.sound;
-  const button = event.target.closest("[data-say], [data-audio], [data-copy], [data-share]");
+  const button = event.target.closest("[data-say], [data-copy], [data-share]");
   if (!button) return;
   if (button.dataset.say) say(button);
-  else if (button.dataset.audio) playAudio(button);
   else if (button.dataset.share) share(button);
   else copy(button);
 });

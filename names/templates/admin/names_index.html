@@ -8,8 +8,7 @@
     <tr><th scope="row">Suggestions served from the catalogue, not AI</th><td>{% if overview.catalog_share is None %}None yet{% else %}{{ overview.catalog_share }}%{% endif %}</td></tr>
     <tr><th scope="row">AI requests</th><td>{{ overview.llm_calls }}{% for row in overview.llm_by_kind %} ({{ row.kind }}: {{ row.total }} calls, {{ row.names }} names){% endfor %}</td></tr>
     <tr><th scope="row">Insights cached for every family</th><td>{{ overview.insights_cached }}</td></tr>
-    <tr><th scope="row">Voices recorded</th><td>{{ overview.voices_ready }}</td></tr>
-    <tr><th scope="row">Voices waiting</th><td>{{ overview.voices_waiting }}</td></tr>
+    <tr><th scope="row">Names spelled by sound</th><td>{{ overview.sounds_like_ready }}</td></tr>
     <tr><th scope="row">Spelling variations learned</th><td>{{ overview.aliases }}</td></tr>
     <tr><th scope="row">Background jobs waiting, failed</th><td>{{ overview.jobs_waiting }}, {{ overview.jobs_failed }}</td></tr>
     <tr><th scope="row">Boards</th><td>{{ overview.boards }}</td></tr>

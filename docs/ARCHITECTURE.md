@@ -93,19 +93,22 @@ Nothing talks to a third party while a person waits, except the Google sign-in c
 | Tags and meaning for a name | The card at once, with details filling in | Polls every 2 seconds |
 | "Ask AI" | Keeps swiping | Cards join the deck when ready |
 | Family ideas | Catalogue ideas at once | LLM ideas join them |
-| Natural voice | Plays at once if it's been recorded. Otherwise "Preparing…", and the device voice is instant | Plays when ready |
 | Name number | Usually there already. Otherwise "Working out its number…" on the card | Polls every 2 seconds. The row is deleted on success |
 | Birth star | "Working out the birth star…" | Polls every 2 seconds, then reloads the page. The row is deleted on success |
 
 ### When a name arrives
 
-`services.prepare_names` runs for every name reaching a board, however it got there. It asks for its details, its recording and its number straight away, so the card already has them when someone looks. The LLM worker takes its work in this order, and goes back to the top after each step:
+`services.prepare_names` runs for every name reaching a board, however it got there. It asks for its details and its number straight away, so the card already has them when someone looks. The LLM worker takes its work in this order, and goes back to the top after each step:
 
-1. Jobs a person is waiting on, such as "Ask AI" or a tap on a voice not recorded yet.
+1. Jobs a person is waiting on, such as "Ask AI".
 2. Batches of names waiting for details.
-3. One recording, once that name has its details, because the native spelling is what gets spoken.
+3. Spellings for names that don't have one yet, such as those from before we asked. Names on a board go first, then the most picked. These calls are paced and capped per day, stop for a while if Gemini asks, and aren't charged to any family.
 
-Recordings are shared by every family, so each name is recorded once. They're paced, capped per day, and stop for a while if Gemini asks. Names on a board go first. Up to half the daily budget then goes on the rest of the approved catalogue, most picked first. A board with AI switched off asks for no recordings. These calls aren't charged to any family. `run_jobs` restarts the queue after a pause.
+`run_jobs` restarts the queue after a pause.
+
+### How a name is said
+
+Only the device's own voice reads names, so it costs nothing and never waits on a server. Details include `sounds_like`, the name spelled by sound. If the device has a voice for the name's language, it reads the name in its own script. If it doesn't, or there's no script, an English voice reads `sounds_like`. Phones read this aloud, so `catalog.checked_sounds_like` only keeps plain letters that could really be this name. Without one, the name is read as written.
 
 ## How a birth star works
 
@@ -177,7 +180,8 @@ What someone typed is kept. A name typed in a script gets its Latin spelling onc
 3. Answers are cached by phonetic key, so a name is only described or voiced once across all families.
 4. Paid answers join the moderation queue and can serve other families for free once approved.
 5. A monthly allowance per parent, plus limits per board and overall.
-6. Family ideas call the LLM at most once per version of a brief, however many relatives open the link.
+6. Opening the family link calls the LLM at most once per version of a brief, however many relatives open it.
+7. A relative can ask for new ideas, which is one more call. It's capped per board per day, and it stops while the parents have 20 of their monthly requests left, so a shared link can't use up their allowance.
 
 ## What the LLM sees
 

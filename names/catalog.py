@@ -19,13 +19,13 @@ from rapidfuzz.distance import JaroWinkler
 from . import jobs
 from .ai.base import NameIdea
 from .ai.context import scrub
-from .dedup import looks_like_name, phonetic_key
+from .dedup import looks_like_name, phonetic_key, same_name
 from .models import CatalogName, Genre, Name, NameAlias
 
 VALID_NAME = re.compile(r"^[^\d<>/:@]{1,40}$")
 COLUMNS = [
     "name", "meaning", "origin", "gender", "genres", "native", "respelling", "speech_lang", "rarity", "style",
-    "insight", "variants",
+    "insight", "variants", "sounds_like",
 ]  # fmt: skip
 # The names an LLM reaches for first, whatever the brief. Popularity from our own boards is added to these.
 ALWAYS_OVERUSED = (
@@ -38,6 +38,7 @@ RETRY_FAILED_AFTER = timedelta(hours=1)
 SAME_SPELLING = 0.7  # Below this, the LLM has changed the name rather than its spelling, so it isn't merged.
 _WORD_BREAK = re.compile(r"[\s,.;:!?()\"'।॥-]+")
 _MARKUP = re.compile(r"[*_`#]+")
+_SOUND_SPELLING = re.compile(r"[a-z]{1,30}( [a-z]{1,30}){0,2}")
 # Lets a parent's own words find catalogue genres in the browser, without a call to the LLM.
 _GENRE_WORDS = {
     "Nature": "nature river rivers tree trees forest flower flowers lotus earth mountain mountains rain ocean sea leaf",
@@ -133,13 +134,6 @@ def request_enrichment(text: str, key: str) -> bool:
     return True
 
 
-def request_voices(keys: Iterable[str]) -> None:
-    """Queues recordings for names now on a board, so the natural voice is ready before anyone taps it."""
-    missing = CatalogName.objects.filter(key__in=keys, audio__isnull=True, voice_state=CatalogName.Enrich.NONE)
-    if missing.exclude(status=CatalogName.Status.REJECTED).update(voice_state=CatalogName.Enrich.PENDING):
-        jobs.kick(jobs.LLM)
-
-
 def queue_blank_entries(entries) -> None:
     """Admins can upload bare names and let the batches fill them in."""
     entries.filter(meaning="", enrich_state=CatalogName.Enrich.NONE).update(enrich_state=CatalogName.Enrich.PENDING)
@@ -176,6 +170,7 @@ def _store_answer(entry: CatalogName, idea: NameIdea) -> None:
         ("origin", idea.origin[:80]),
         ("native", idea.native_script[:60]),
         ("respelling", idea.respelling[:80]),
+        ("sounds_like", idea.sounds_like),
         ("speech_lang", idea.speech_lang[:20]),
     ):
         if unreviewed or not getattr(entry, attribute):
@@ -233,9 +228,16 @@ def _without_contact_details(text: str) -> str:
     return text if scrub(text) == text else ""
 
 
+def checked_sounds_like(spelling: str, name: str) -> str:
+    """Phones read this aloud, so it has to be plain letters that could really be this name, and not a message."""
+    spelling = spelling.strip().lower()
+    return spelling if _SOUND_SPELLING.fullmatch(spelling) and same_name(spelling, phonetic_key(name)) else ""
+
+
 def tidy_idea(idea: NameIdea) -> NameIdea:
     return idea.model_copy(
         update={
+            "sounds_like": checked_sounds_like(idea.sounds_like, idea.name),
             "meaning": _without_contact_details(tidy(idea.meaning, _MEANING_WORDS)),
             "insight": _without_contact_details(tidy(idea.insight, _INSIGHT_WORDS)[:200]),
             "surname_fit": _without_contact_details(tidy(idea.surname_fit, _INSIGHT_WORDS)[:200]),
@@ -280,6 +282,7 @@ def remember_ideas(ideas: Iterable[NameIdea]) -> None:
                 "insight": idea.insight[:200],
                 "origin": idea.origin[:80],
                 "respelling": idea.respelling[:80],
+                "sounds_like": idea.sounds_like,
                 "speech_lang": idea.speech_lang[:20],
                 "gender": _choice(idea.gender, CatalogName.Gender, "any"),
                 "rarity": _choice(idea.rarity, CatalogName.Rarity, "uncommon"),
@@ -347,6 +350,7 @@ def _fields_from(row: dict, options: ImportOptions, key: str) -> dict:
         "origin": (row.get("origin") or options.origin)[:80],
         "native": row.get("native", "")[:60],
         "respelling": row.get("respelling", "")[:80],
+        "sounds_like": checked_sounds_like(row.get("sounds_like", ""), row["name"]),
         "speech_lang": row.get("speech_lang", "")[:20],
         "gender": _choice(row.get("gender", ""), CatalogName.Gender, options.gender),
         "rarity": _choice(row.get("rarity", ""), CatalogName.Rarity, "uncommon"),
@@ -371,7 +375,7 @@ def _merge(entry: CatalogName, fields: dict, genres: list[Genre], options: Impor
             CatalogName.objects.filter(pk=entry.pk).update(submissions=F("submissions") + 1)
         result.duplicates += 1
         return
-    for name in ("meaning", "insight", "origin", "native", "respelling", "speech_lang"):
+    for name in ("meaning", "insight", "origin", "native", "respelling", "sounds_like", "speech_lang"):
         if fields[name] and not getattr(entry, name):
             setattr(entry, name, fields[name])
     entry.status = options.status

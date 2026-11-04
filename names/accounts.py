@@ -45,6 +45,12 @@ def ai_calls_left(user: AbstractBaseUser) -> int:
     return max(settings.AI_FREE_CALLS_PER_MONTH - used, 0)
 
 
+def family_refresh_allowed(board: Board) -> bool:
+    """Anyone with the family link can ask for this, so part of the parents' allowance stays out of their reach."""
+    owner = board.members.order_by("pk").first()
+    return ai_allowed(board) and owner is not None and ai_calls_left(owner) > settings.AI_CALLS_KEPT_FOR_PARENTS
+
+
 def charge_ai_call(board: Board, kind: str) -> None:
     """Family members have no account, so their requests count against the parent who owns the board."""
     owner = board.members.order_by("pk").first()

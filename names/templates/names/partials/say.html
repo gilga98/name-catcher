@@ -1,6 +1,5 @@
 {% load ui %}<p class="say">
-  <button class="say-button" type="button" data-say="{{ name.native|default:name.text }}" data-lang="{{ name.speech_lang }}" title="Hear it" aria-label="Hear {{ name.text }} with your device's voice">{% icon "speaker" %}</button>
-  <button class="say-button" type="button" data-audio="{% url 'audio' token name.pk %}" title="Natural voice" aria-label="Hear {{ name.text }} in a natural voice">{% icon "voice" %}</button>
+  <button class="say-button" type="button" data-say="{{ name.spoken_text }}" data-lang="{{ name.spoken_lang }}" data-fallback="{{ name.spoken_fallback }}" title="Hear it" aria-label="Hear {{ name.text }}">{% icon "speaker" %}</button>
   {% if name.respelling %}<span class="respelling">{{ name.respelling }}</span>{% endif %}
   <span class="syllables" role="img" aria-label="{{ name.syllables }} syllable{{ name.syllables|pluralize }}" title="{{ name.syllables }} syllable{{ name.syllables|pluralize }}">{% for _ in name.syllables|times %}<i></i>{% endfor %}</span>
 </p>

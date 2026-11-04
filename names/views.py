@@ -16,7 +16,6 @@ from django_ratelimit.decorators import ratelimit
 from django_ratelimit.exceptions import Ratelimited
 
 from . import accounts, catalog, places, services
-from .ai.base import AIError
 from .analytics import allow_web_analytics
 from .forms import GENDERS, STYLES, UNIQUENESS, AddNameForm, BirthStarForm, BriefForm
 from .jobs import LLM, SOOTA, nudge
@@ -421,14 +420,49 @@ def _may_spend_ai(request: HttpRequest) -> bool:
     return True
 
 
+def _may_refresh_family_ideas(request: HttpRequest) -> bool:
+    if not accounts.family_refresh_allowed(request.board):
+        return False
+    rate = settings.FAMILY_REFRESH_RATE
+    limited = is_ratelimited(request, group="family-refresh", key=_board_token, rate=rate, increment=True)
+    return not limited and _may_spend_ai(request)
+
+
+def _family_ideas_panel(request: HttpRequest, *, allow_llm: bool = False, no_new: bool = False) -> HttpResponse:
+    board = request.board
+    ideas = services.family_ideas(board, allow_llm=allow_llm)
+    pending = services.family_ideas_pending(board)
+    if pending:
+        nudge(LLM)
+    context = _context(
+        request,
+        ideas=ideas,
+        pending=pending,
+        no_new=no_new and not pending,
+        can_refresh=not pending and accounts.family_refresh_allowed(board),
+    )
+    return render(request, "names/partials/family_ideas.html", context)
+
+
 @require_POST
 @with_board()
 def family_ideas(request: HttpRequest, token: str) -> HttpResponse:
     board = request.board
     allow_llm = services.family_ideas_need_llm(board) and _may_spend_ai(request)
-    ideas = services.family_ideas(board, allow_llm=allow_llm)
-    pending = services.family_ideas_pending(board)
-    return render(request, "names/partials/family_ideas.html", _context(request, ideas=ideas, pending=pending))
+    no_new = "refreshing" in request.POST and services.family_refresh_failed(board)
+    return _family_ideas_panel(request, allow_llm=allow_llm, no_new=no_new)
+
+
+@require_POST
+@with_board()
+def refresh_family_ideas(request: HttpRequest, token: str) -> HttpResponse:
+    board = request.board
+    if services.family_ideas_pending(board):
+        return _family_ideas_panel(request)
+    if not _may_refresh_family_ideas(request):
+        return _family_ideas_panel(request, no_new=True)
+    services.refresh_family_ideas(board)
+    return _family_ideas_panel(request, no_new=services.family_refresh_failed(board))
 
 
 @require_POST
@@ -525,23 +559,3 @@ def name_details(request: HttpRequest, token: str, pk: int) -> HttpResponse:
     state = services.describe_name(name)
     context = _context(request, name=name, no_details=state == services.Details.UNAVAILABLE)
     return render(request, "names/partials/name_details.html", context)
-
-
-@require_GET
-@with_board(parent_only=True)
-def name_audio(request: HttpRequest, token: str, pk: int) -> HttpResponse:
-    name = get_object_or_404(request.board.names, pk=pk)
-    audio = services.cached_audio(name)
-    if audio is None:
-        if not services.speech_underway(name):  # Asking again while it records costs nothing, so it spends nothing.
-            _spend_ai_budget(request)
-        job = services.start_speaking(name)
-        if job.status == Job.Status.FAILED:
-            raise AIError(job.result.get("error", "The natural voice isn't available right now."))
-        name.refresh_from_db()
-        audio = services.cached_audio(name)
-    if audio is None:
-        return HttpResponse(status=202)  # Still recording. The browser asks again in a moment.
-    response = HttpResponse(audio, content_type="audio/wav")
-    response["Cache-Control"] = "private, max-age=86400"
-    return response

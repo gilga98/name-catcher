@@ -103,8 +103,8 @@ def _wake(queue: str, delay: int | None = None) -> None:
 
 def drain(queue: str) -> None:
     tasks = import_module("names.tasks")
-    # People waiting come first, then details for cards, then recordings nobody has asked for yet.
-    while _run_next(queue, tasks) or (queue == LLM and (tasks.enrich_batch() or tasks.record_next_voice())):
+    # People waiting come first, then details for cards, then filling in spellings names didn't get when they arrived.
+    while _run_next(queue, tasks) or (queue == LLM and (tasks.enrich_batch() or tasks.respell_batch())):
         pass
 
 

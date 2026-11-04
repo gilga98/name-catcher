@@ -21,8 +21,6 @@ from .dedup import (
 from .jobs import LLM, SOOTA, enqueue
 from .models import AICall, Board, CatalogName, ConsentRecord, Job, Name, Swipe, Vote, new_token
 
-UNSPEAKABLE = "The natural voice isn't available for this name. Use your device's voice."
-
 
 @dataclass(frozen=True)
 class Voter:
@@ -70,6 +68,7 @@ def _build_name(board: Board, idea: NameIdea, **fields) -> Name:
         meaning=idea.meaning[:300],
         origin=idea.origin[:80],
         respelling=idea.respelling[:80],
+        sounds_like=idea.sounds_like,
         speech_lang=idea.speech_lang[:20],
         surname_fit=idea.surname_fit[:200] or catalog.surname_fit(idea.name, board.brief.get("surname", "")),
         insight=idea.insight[:200],
@@ -88,6 +87,7 @@ def _from_catalog(board: Board, entry: CatalogName) -> Name:
         origin=entry.origin,
         # A bare uploaded name has no details yet. Leaving this blank asks the next LLM batch to fill it in.
         respelling=(entry.respelling or entry.text) if entry.meaning else "",
+        sounds_like=entry.sounds_like,
         speech_lang=entry.speech_lang,
         surname_fit=catalog.surname_fit(entry.text, board.brief.get("surname", "")),
         insight=entry.insight,
@@ -210,7 +210,7 @@ def _suggestion_request(board: Board, more_like: str = "") -> SuggestionRequest:
     )
 
 
-def _family_request(board: Board) -> SuggestionRequest:
+def _family_request(board: Board, shown: list[str]) -> SuggestionRequest:
     """Relatives read this answer, so the prompt holds only what they can already see. Text they typed stays out too."""
     brief = brief_for_llm(board.brief)
     if not board.brief.get("share_notes"):
@@ -219,6 +219,7 @@ def _family_request(board: Board) -> SuggestionRequest:
         brief=brief,
         overused=catalog.overused_names(),
         genres=catalog.genre_names(),
+        shown=shown,
     )
 
 
@@ -250,11 +251,29 @@ def start_suggesting(board: Board, more_like: str = "") -> Job:
 
 
 MIN_FAMILY_IDEAS = 4
+MAX_FAMILY_IDEAS = 8
+MAX_SHOWN_IDEAS = 60
 
 
-def _stored_family_ideas(board: Board) -> list[dict]:
+def _stored_family_ideas(board: Board) -> dict:
     stored = board.family_ideas
-    return stored["names"] if stored.get("stamp") == catalog.brief_stamp(board.brief) else []
+    return stored if stored.get("stamp") == catalog.brief_stamp(board.brief) else {}
+
+
+def _hidden_from_family(board: Board, shown: list[str]) -> set[str]:
+    """Already on the board, what the parents want to avoid, and whatever a refresh has moved past."""
+    on_board = board.names.values_list("key", flat=True)
+    return {*on_board, *_avoided(board), *map(phonetic_key, shown)}
+
+
+def _family_list(board: Board) -> list[dict]:
+    """The LLM's latest ideas lead, or a refresh wouldn't change what relatives see. The catalogue fills the rest."""
+    stored = _stored_family_ideas(board)
+    hidden = _hidden_from_family(board, stored.get("shown", []))
+    ideas = [idea for idea in stored.get("names", []) if phonetic_key(idea["text"]) not in hidden]
+    hidden |= {phonetic_key(idea["text"]) for idea in ideas}
+    ideas += [{"text": n.text, "meaning": n.meaning} for n in catalog.ideas_for(board.brief, hidden)]
+    return ideas[:MAX_FAMILY_IDEAS]
 
 
 def family_ideas_need_llm(board: Board) -> bool:
@@ -265,32 +284,50 @@ def family_ideas_need_llm(board: Board) -> bool:
     return len(catalog.ideas_for(board.brief, seen, MIN_FAMILY_IDEAS)) < MIN_FAMILY_IDEAS
 
 
-def fetch_family_ideas(board: Board) -> None:
+def fetch_family_ideas(board: Board, *, refresh: bool = False) -> None:
+    stored = _stored_family_ideas(board)
+    shown = [*stored.get("shown", []), *(idea["text"] for idea in _family_list(board))] if refresh else []
+    shown = shown[-MAX_SHOWN_IDEAS:]
     try:
         accounts.charge_ai_call(board, AICall.Kind.SUGGEST)
-        names = [{"text": i.name[:60], "meaning": i.meaning} for i in _ask_llm(_family_request(board))]
+        names = [{"text": i.name[:60], "meaning": i.meaning} for i in _ask_llm(_family_request(board, shown))]
     except AIError:
         names = []  # They can still type their own, so a failure here isn't worth an error.
-    board.family_ideas = {"stamp": catalog.brief_stamp(board.brief), "names": names, "pending": False}
+    stamp = catalog.brief_stamp(board.brief)
+    hidden = _hidden_from_family(board, shown)
+    if refresh and all(phonetic_key(idea["text"]) in hidden for idea in names):
+        # Nothing new to offer, so relatives keep the list they have rather than losing it.
+        board.family_ideas = {**stored, "stamp": stamp, "refresh_failed": True}
+    else:
+        board.family_ideas = {"stamp": stamp, "names": names, "shown": shown}
     board.save(update_fields=["family_ideas"])
 
 
 def family_ideas_pending(board: Board) -> bool:
-    stored = board.family_ideas
-    return bool(stored.get("pending")) and stored.get("stamp") == catalog.brief_stamp(board.brief)
+    """Asks the job rather than a stored flag, so a call that died can't leave relatives waiting for ever."""
+    active = [Job.Status.QUEUED, Job.Status.RUNNING]
+    return Job.objects.filter(board=board, kind="family_ideas", status__in=active).exists()
+
+
+def refresh_family_ideas(board: Board) -> None:
+    """A relative asked for different names. One call however many tap at once, and everyone sees the answer."""
+    payload = {"board": board.pk, "refresh": True}
+    enqueue(LLM, "family_ideas", payload, board=board, dedupe=f"family-ideas-{board.pk}")
+    board.refresh_from_db(fields=["family_ideas"])
+
+
+def family_refresh_failed(board: Board) -> bool:
+    return bool(_stored_family_ideas(board).get("refresh_failed"))
 
 
 def family_ideas(board: Board, *, allow_llm: bool) -> list[dict]:
     """Ideas for relatives to tap, right away from the catalogue. Any LLM ideas join them when they're ready."""
     if allow_llm and family_ideas_need_llm(board):
-        board.family_ideas = {"stamp": catalog.brief_stamp(board.brief), "names": [], "pending": True}
+        board.family_ideas = {"stamp": catalog.brief_stamp(board.brief), "names": []}
         board.save(update_fields=["family_ideas"])
-        enqueue(LLM, "family_ideas", {"board": board.pk}, board=board)
+        enqueue(LLM, "family_ideas", {"board": board.pk}, board=board, dedupe=f"family-ideas-{board.pk}")
         board.refresh_from_db()
-    seen = set(board.names.values_list("key", flat=True))
-    ideas = [{"text": n.text, "meaning": n.meaning} for n in catalog.ideas_for(board.brief, seen)]
-    ideas += [idea for idea in _stored_family_ideas(board) if phonetic_key(idea["text"]) not in seen]
-    return ideas[:8]
+    return _family_list(board)
 
 
 def add_name(board: Board, text: str, voter: Voter, *, force: bool = False) -> AddResult:
@@ -333,10 +370,12 @@ def _copy_details(name: Name, entry: CatalogName) -> None:
     name.respelling = details.respelling or name.text
     # The voice has to match the script on the card, which only we know for certain.
     name.speech_lang = speech_language(name.native) or details.speech_lang or name.speech_lang
+    name.sounds_like = details.sounds_like
     name.surname_fit, name.insight, name.tags = details.surname_fit, details.insight, details.tags
     name.save(
         update_fields=[
-            "text", "native", "meaning", "origin", "respelling", "speech_lang", "surname_fit", "insight", "tags",
+            "text", "native", "meaning", "origin", "respelling", "sounds_like", "speech_lang", "surname_fit", "insight",
+            "tags",
         ]  # fmt: skip
     )
 
@@ -359,8 +398,6 @@ def prepare_names(board: Board, names: list[Name]) -> None:
     """Starts every third-party call a card could need as soon as a name arrives, so nobody waits on one later."""
     for name in names:
         describe_name(name)
-    if accounts.ai_allowed(board):
-        catalog.request_voices([name.key for name in names])
     for name in names:
         if request_name_number(name):
             break  # One request covers every name waiting on the board.
@@ -368,11 +405,9 @@ def prepare_names(board: Board, names: list[Name]) -> None:
 
 def fill_boards(entry: CatalogName) -> None:
     """One LLM answer reaches every family waiting on that name."""
-    waiting = list(Name.objects.filter(key=entry.key, respelling="").select_related("board").defer("audio"))
+    waiting = Name.objects.filter(key=entry.key, respelling="").select_related("board").defer("audio")
     for name in waiting:
         _copy_details(name, entry)
-    if waiting:
-        catalog.request_voices([entry.key])  # Spelling merges can move a name to this entry after it was first asked.
 
 
 def merge_into(name: Name, text: str, voter: Voter) -> bool:
@@ -516,54 +551,6 @@ def split_variant(name: Name, variant: str, voter: Voter) -> None:
         name.variants.remove(variant)
         name.save(update_fields=["variants"])
         add_name(name.board, variant, voter, force=True)
-
-
-def cached_audio(name: Name) -> bytes | None:
-    if name.audio is not None:
-        return bytes(name.audio)
-    shared = CatalogName.objects.filter(key=name.key, audio__isnull=False).first()
-    if shared is None:
-        return None
-    name.audio = shared.audio
-    name.save(update_fields=["audio"])
-    return bytes(shared.audio)
-
-
-def speech_underway(name: Name) -> bool:
-    return Job.objects.filter(dedupe=f"speak:{name.key}", status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).exists()
-
-
-def start_speaking(name: Name) -> Job:
-    """Everyone asking for this name's voice at once shares one job, and the recording, for good."""
-    if not accounts.ai_allowed(name.board):
-        raise AIError("The natural voice uses AI, which is switched off for this board. Use your device's voice.")
-    if not speech_underway(name):
-        accounts.charge_ai_call(name.board, AICall.Kind.SPEAK)
-    return enqueue(LLM, "speak", {"name": name.pk}, board=name.board, dedupe=f"speak:{name.key}")
-
-
-def _speech_text(name: Name | CatalogName) -> str:
-    """The recording is shared by everyone with this key, so what's spoken has to sound like that key."""
-    for text in (name.native, name.text):
-        if text and (catalog.canonical_key(text) == name.key or same_name(text, name.key)):
-            return text
-    raise AIError(UNSPEAKABLE)
-
-
-def record_audio(name: Name) -> None:
-    if cached_audio(name) is not None:  # The pipeline got there while this job was waiting.
-        return
-    audio = get_ai().speak(_speech_text(name))
-    CatalogName.objects.get_or_create(key=name.key, defaults={"text": name.text, "source": CatalogName.Source.LLM})
-    CatalogName.objects.filter(key=name.key).update(audio=audio, voice_state=CatalogName.Enrich.DONE)
-    name.audio = audio
-    name.save(update_fields=["audio"])
-
-
-def record_catalog_voice(entry: CatalogName) -> None:
-    """Boards pick this up through cached_audio the first time someone taps."""
-    audio = get_ai().speak(_speech_text(entry))
-    CatalogName.objects.filter(pk=entry.pk).update(audio=audio, voice_state=CatalogName.Enrich.DONE)
 
 
 def shortlist(board: Board, voter: Voter) -> list[Name]:

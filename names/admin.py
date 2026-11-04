@@ -33,8 +33,7 @@ def overview() -> dict:
         .values("kind")
         .annotate(total=Count("pk"), names=Sum("units")),
         "insights_cached": CatalogName.objects.filter(enrich_state=CatalogName.Enrich.DONE).count(),
-        "voices_ready": CatalogName.objects.filter(audio__isnull=False).count(),
-        "voices_waiting": CatalogName.objects.filter(voice_state=CatalogName.Enrich.PENDING).count(),
+        "sounds_like_ready": CatalogName.objects.exclude(sounds_like="").count(),
         "aliases": NameAlias.objects.count(),
         "jobs_waiting": Job.objects.filter(status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).count(),
         "jobs_failed": Job.objects.filter(status=Job.Status.FAILED).count(),
@@ -90,9 +89,12 @@ class CatalogNameAdmin(admin.ModelAdmin):
     search_fields = ["text", "native", "meaning", "key"]
     filter_horizontal = ["genres"]
     readonly_fields = [
-        "key", "source", "submitted_by", "submissions", "picks", "updated_at", "enrich_state", "voice_state",
+        "key", "source", "submitted_by", "submissions", "picks", "updated_at", "enrich_state",
     ]  # fmt: skip
-    exclude = ["enrich_attempts", "enrich_claimed_at", "voice_attempts", "voice_claimed_at"]
+    exclude = [
+        "enrich_attempts", "enrich_claimed_at", "sounds_like_attempts", "voice_state", "voice_attempts",
+        "voice_claimed_at",
+    ]  # fmt: skip
     actions = ["approve", "reject"]
     ordering = ["-submissions", "text"]
 

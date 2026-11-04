@@ -13,6 +13,9 @@ def new_token() -> str:
     return secrets.token_urlsafe(16)
 
 
+FALLBACK_VOICE = "en-IN"
+
+
 class Board(models.Model):
     """One family's naming project. Parents sign in; the family link alone lets relatives vote and suggest."""
 
@@ -44,6 +47,7 @@ class Name(models.Model):
     meaning = models.CharField(max_length=300, blank=True)
     origin = models.CharField(max_length=80, blank=True)
     respelling = models.CharField(max_length=80, blank=True)
+    sounds_like = models.CharField(max_length=40, blank=True, default="", db_default="")
     speech_lang = models.CharField(max_length=20, blank=True)
     surname_fit = models.CharField(max_length=200, blank=True)
     insight = models.CharField(max_length=200, blank=True)
@@ -53,7 +57,7 @@ class Name(models.Model):
     source = models.CharField(max_length=10, choices=Source, default=Source.FAMILY)
     rank = models.PositiveIntegerField(default=0)
     suggested_by = models.CharField(max_length=40, blank=True)
-    audio = models.BinaryField(null=True, editable=False)
+    audio = models.BinaryField(null=True, editable=False)  # Unused. The next deploy drops it.
     numerology = models.JSONField(default=dict, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -75,6 +79,24 @@ class Name(models.Model):
     def current_number(self) -> dict | None:
         """Another spelling has another number, so one saved for an old spelling doesn't count."""
         return self.numerology if self.numerology.get("text") == self.text else None
+
+    @property
+    def _has_native_script(self) -> bool:
+        return bool(self.native) and not self.native.isascii()
+
+    @property
+    def spoken_text(self) -> str:
+        """The script of its origin is what a voice for that language reads best."""
+        return self.native if self._has_native_script else self.spoken_fallback
+
+    @property
+    def spoken_lang(self) -> str:
+        return (self.speech_lang or FALLBACK_VOICE) if self._has_native_script else FALLBACK_VOICE
+
+    @property
+    def spoken_fallback(self) -> str:
+        """For a device with no voice for that language. Spelled by sound, an English voice gets close."""
+        return self.sounds_like or self.text
 
     @property
     def needs_number(self) -> bool:
@@ -186,6 +208,8 @@ class CatalogName(models.Model):
     insight = models.CharField(max_length=200, blank=True)
     origin = models.CharField(max_length=80, blank=True, db_index=True)
     respelling = models.CharField(max_length=80, blank=True)
+    sounds_like = models.CharField(max_length=40, blank=True, default="", db_default="")
+    sounds_like_attempts = models.PositiveSmallIntegerField(default=0, db_default=0)
     speech_lang = models.CharField(max_length=20, blank=True)
     gender = models.CharField(max_length=10, choices=Gender, default=Gender.ANY)
     rarity = models.CharField(max_length=10, choices=Rarity, default=Rarity.UNCOMMON)
@@ -200,6 +224,7 @@ class CatalogName(models.Model):
     submissions = models.PositiveIntegerField(default=1)  # How many people independently offered this name.
     supporters = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="+")
     picks = models.PositiveIntegerField(default=0)  # How often it reached a board. High means overused.
+    # Unused. The next deploy drops these four.
     audio = models.BinaryField(null=True, editable=False)
     voice_state = models.CharField(max_length=10, choices=Enrich, default=Enrich.NONE, db_index=True)
     voice_attempts = models.PositiveSmallIntegerField(default=0)
@@ -251,7 +276,8 @@ class AICall(models.Model):
     class Kind(models.TextChoices):
         SUGGEST = "suggest"
         DESCRIBE = "describe"
-        SPEAK = "speak"
+        SPEAK = "speak"  # No longer made, but past months still count them.
+        RESPELL = "respell"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="ai_calls")
     kind = models.CharField(max_length=10, choices=Kind)

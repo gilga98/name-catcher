@@ -1,5 +1,4 @@
 import json
-from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -91,7 +90,8 @@ def test_family_name_is_only_sent_after_opting_in(board, spy):
 def test_llm_output_is_kept_short_and_plain():
     idea = NameIdea(
         name="Tara", native_script="तारा", meaning="**Star** of " + "very " * 30, origin="Sanskrit",
-        respelling="TAA-raa", speech_lang="hi-IN", gender="girl", rarity="rare", style="any", genres=[],
+        respelling="TAA-raa", sounds_like="taaraa", speech_lang="hi-IN",
+        gender="girl", rarity="rare", style="any", genres=[],
         insight="# A " + "long " * 40, surname_fit="",
     )  # fmt: skip
     tidy = catalog.tidy_idea(idea)
@@ -147,18 +147,6 @@ def test_each_name_is_only_ever_described_once(board, spy):
     services.describe_name(first)
     services.describe_name(second)
     assert spy.described == [["Zubin"]]
-
-
-def test_recordings_are_shared_between_families(board, monkeypatch):
-    spoken = []
-    voice = SimpleNamespace(speak=lambda text: spoken.append(text) or b"RIFF")
-    monkeypatch.setattr(services, "get_ai", lambda: voice)
-    approved("Ahana")
-    first = Name.objects.create(board=board, text="Ahana", key=catalog.phonetic_key("Ahana"))
-    second = Name.objects.create(board=Board.objects.create(), text="Ahana", key=catalog.phonetic_key("Ahana"))
-    services.start_speaking(first)
-    assert services.cached_audio(second) == b"RIFF"
-    assert len(spoken) == 1
 
 
 def test_switching_ai_off_stops_all_llm_use(board, user, spy, client):

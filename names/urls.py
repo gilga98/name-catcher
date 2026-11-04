@@ -12,7 +12,6 @@ name_actions = {
     "merge": views.merge_name,
     "official": views.official_spelling,
     "split": views.split_name,
-    "audio": views.name_audio,
     "details": views.name_details,
     "number": views.name_number,
 }
@@ -47,6 +46,7 @@ urlpatterns = [
     path("b/<str:token>/shortlist", views.shortlist_panel, name="shortlist_panel"),
     path("b/<str:token>/cards", views.new_cards, name="new_cards"),
     path("b/<str:token>/ideas", views.family_ideas, name="family_ideas"),
+    path("b/<str:token>/ideas/refresh", views.refresh_family_ideas, name="refresh_family_ideas"),
     path("b/<str:token>/rank", views.rank, name="rank"),
     path("b/<str:token>/names", views.add, name="add"),
     *[path(f"b/<str:token>/names/<int:pk>/{slug}", view, name=slug) for slug, view in name_actions.items()],

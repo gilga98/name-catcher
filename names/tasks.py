@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Q, Sum
+from django.db.models import Exists, OuterRef, Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 MAX_ENRICH_ATTEMPTS = 3
 ENRICH_LEASE = timedelta(minutes=3)
-MAX_VOICE_ATTEMPTS = 3
-VOICE_PAUSED, VOICE_SPACED = "voice-paused", "voice-spaced"
+MAX_RESPELL_ATTEMPTS = 3
+RESPELL_PAUSED, RESPELL_SPACED = "respell-paused", "respell-spaced"
 
 
 def send_email(job: Job) -> None:
@@ -34,11 +34,8 @@ def suggest(job: Job) -> dict:
 
 
 def family_ideas(job: Job) -> None:
-    services.fetch_family_ideas(get_object_or_404(Board, pk=job.payload["board"]))
-
-
-def speak(job: Job) -> None:
-    services.record_audio(Name.objects.get(pk=job.payload["name"]))
+    board = get_object_or_404(Board, pk=job.payload["board"])
+    services.fetch_family_ideas(board, refresh=job.payload.get("refresh", False))
 
 
 def read_birth_star(job: Job) -> None:
@@ -121,58 +118,54 @@ def enrich_batch() -> bool:
     return True
 
 
-def _next_voice() -> CatalogName | None:
-    """Names on a board come first. Half the budget at most goes on the catalogue, most picked first, so that a name
-    someone adds in the evening doesn't have to wait for tomorrow."""
+def _lacking_sounds_like():
+    being_described = [CatalogName.Enrich.PENDING, CatalogName.Enrich.RUNNING]
+    lacking = CatalogName.objects.filter(sounds_like="", sounds_like_attempts__lt=MAX_RESPELL_ATTEMPTS)
+    lacking = lacking.exclude(meaning="").exclude(status=CatalogName.Status.REJECTED)
+    lacking = lacking.exclude(enrich_state__in=being_described)
+    return lacking.defer("audio").annotate(on_board=Exists(Name.objects.filter(key=OuterRef("key"))))
+
+
+def _next_respelling() -> list[CatalogName]:
+    """Names on a board first, then the most picked. As with details, only approved names share a prompt."""
+    lacking = _lacking_sounds_like().order_by("-on_board", "-picks", "pk")
+    first = lacking.first()
+    if first is None or first.status != CatalogName.Status.APPROVED:
+        return [first] if first else []
+    return list(lacking.filter(status=CatalogName.Status.APPROVED)[: settings.AI_ENRICH_BATCH_SIZE])
+
+
+def _store_sounds_like(entry: CatalogName, spelling: str) -> None:
+    """A spelling that doesn't pass counts against the name, so one the LLM can't manage stops costing calls."""
+    entry.sounds_like = catalog.checked_sounds_like(spelling, entry.text)
+    entry.sounds_like_attempts += 1
+    entry.save(update_fields=["sounds_like", "sounds_like_attempts"])
+    if entry.sounds_like:
+        Name.objects.filter(key=entry.key, sounds_like="").update(sounds_like=entry.sounds_like)
+
+
+def respell_batch() -> bool:
+    """Runs only when nothing else is waiting. False means leave it for now: a later wake carries on."""
+    spacing = settings.AI_RESPELL_SPACING_SECONDS
     day = timezone.now() - timedelta(days=1)
-    spent = AICall.objects.filter(user=None, kind=AICall.Kind.SPEAK, created_at__gte=day).count()
-    if spent >= settings.AI_VOICE_PER_DAY:
-        return None
-    # A name still being described may be about to get its native spelling, which is what should be spoken.
-    ready = CatalogName.objects.filter(audio__isnull=True).defer("audio").exclude(
-        enrich_state__in=[CatalogName.Enrich.PENDING, CatalogName.Enrich.RUNNING]
-    )
-    lost = Q(voice_state=CatalogName.Enrich.RUNNING, voice_claimed_at__lt=timezone.now() - ENRICH_LEASE)
-    waiting = ready.filter(Q(voice_state=CatalogName.Enrich.PENDING) | lost).exclude(status=CatalogName.Status.REJECTED)
-    entry = waiting.order_by("pk").first()
-    if entry or spent >= settings.AI_VOICE_PER_DAY // 2:
-        return entry
-    spare = ready.filter(status=CatalogName.Status.APPROVED, voice_state=CatalogName.Enrich.NONE)
-    return spare.order_by("-picks", "pk").first()
-
-
-def _voice_failed(entry: CatalogName) -> None:
-    entry.voice_attempts += 1
-    give_up = entry.voice_attempts >= MAX_VOICE_ATTEMPTS
-    entry.voice_state = CatalogName.Enrich.FAILED if give_up else CatalogName.Enrich.PENDING
-    entry.save(update_fields=["voice_attempts", "voice_state"])
-
-
-def record_next_voice() -> bool:
-    """Runs only when nobody is waiting on the LLM queue. False means leave it for now: a later wake carries on."""
-    spacing = settings.AI_VOICE_SPACING_SECONDS
-    if cache.get(VOICE_PAUSED):
+    spent = AICall.objects.filter(kind=AICall.Kind.RESPELL, created_at__gte=day).count()
+    if cache.get(RESPELL_PAUSED) or spent >= settings.AI_RESPELL_CALLS_PER_DAY:
         return False
-    entry = _next_voice()
-    if entry is None or (spacing and not cache.add(VOICE_SPACED, 1, spacing)):
+    batch = _next_respelling()
+    if not batch or (spacing and not cache.add(RESPELL_SPACED, 1, spacing)):
         return False
-    now = timezone.now()
-    won = CatalogName.objects.filter(pk=entry.pk, voice_state=entry.voice_state).update(
-        voice_state=CatalogName.Enrich.RUNNING, voice_claimed_at=now
-    )
-    if not won:
-        return True
-    AICall.objects.create(user=None, kind=AICall.Kind.SPEAK)
+    AICall.objects.create(user=None, kind=AICall.Kind.RESPELL, units=len(batch))
     try:
-        services.record_catalog_voice(entry)
+        answers = services.get_ai().respell_many([entry.text for entry in batch])
     except AIRateLimited:
-        logger.warning("Pausing voice recordings: rate limited")
-        CatalogName.objects.filter(pk=entry.pk).update(voice_state=CatalogName.Enrich.PENDING)
-        cache.set(VOICE_PAUSED, 1, settings.AI_VOICE_PAUSE_SECONDS)
+        logger.warning("Pausing respelling: rate limited")
+        cache.set(RESPELL_PAUSED, 1, settings.AI_RESPELL_PAUSE_SECONDS)
         return False  # `run_jobs` carries on once the pause has passed.
-    except Exception as exc:  # noqa: BLE001 - One bad name must never stop the queue.
-        logger.warning("Voice recording failed: %s", type(exc).__name__)
-        _voice_failed(entry)
+    except AIError:
+        answers = []
+    spellings = {answer.given: answer.sounds_like for answer in answers}
+    for entry in batch:
+        _store_sounds_like(entry, spellings.get(entry.text, ""))
     if spacing:
         jobs.kick_after(jobs.LLM, spacing)
         return False

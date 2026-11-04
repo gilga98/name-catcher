@@ -269,15 +269,6 @@ def test_ranking_saves_the_new_order(parent, board):
     assert list(board.names.values_list("text", flat=True)) == ["B", "A"]
 
 
-def test_audio_is_generated_once_then_served_from_the_database(parent, board):
-    name = Name.objects.create(board=board, text="Tara", key="tara", status=Name.Status.KEPT)
-    client, token = parent
-    response = client.get(reverse("audio", args=[token, name.pk]))
-    assert response["Content-Type"] == "audio/wav"
-    name.refresh_from_db()
-    assert name.audio
-
-
 @pytest.mark.parametrize(
     ("route", "args"),
     [

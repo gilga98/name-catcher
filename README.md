@@ -43,8 +43,8 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 | `TIME_ZONE` | No | For logs and dates shown on pages. Defaults to `Asia/Kolkata`. |
 | `AI_RATE_PER_IP`, `AI_RATE_PER_BOARD`, `AI_RATE_GLOBAL` | No | Limits on LLM spend, narrowest first. A request stopped by a narrow one doesn't count against the wider ones. |
 | `BOARD_CREATE_RATE`, `BOARD_CREATE_PER_USER`, `BOARD_RATE_PER_IP`, `ADD_RATE_PER_IP`, `GUEST_VOTERS_PER_IP` | No | Per-visitor and per-account limits. Generous, because mobile networks in India put many households behind one address. |
-| `GEMINI_MODEL`, `GEMINI_TTS_MODEL`, `GEMINI_TTS_VOICE` | No | Change models without touching code. |
-| `AI_VOICE_PER_DAY`, `AI_VOICE_SPACING_SECONDS`, `AI_VOICE_PAUSE_SECONDS` | No | Recordings made before anyone taps. Defaults to 60 a day, 20 seconds apart, stopping for an hour if Gemini says to slow down. Set the daily number below your Gemini text-to-speech quota, so taps have some left. |
+| `GEMINI_MODEL` | No | Change models without touching code. |
+| `AI_RESPELL_CALLS_PER_DAY`, `AI_RESPELL_SPACING_SECONDS`, `AI_RESPELL_PAUSE_SECONDS` | No | Filling in spellings by sound for names that don't have one. Defaults to 20 calls a day, a minute apart, stopping for an hour if Gemini says to slow down. Each call covers up to `AI_ENRICH_BATCH_SIZE` names. |
 | `GEMINI_TIMEOUT_MS`, `GEMINI_ATTEMPTS` | No | How long one call may take, and how many tries it gets. Defaults to 30000 and 2. Together they must stay under the three minute job lease. |
 | `SOOTA_API_URL`, `SOOTA_API_KEY` | No | `http://soota-engine-gateway:8000`, and the key for the `naamadeva` client (`python -m engine_gateway.keys naamadeva` in Soota's repo). Soota isn't public, so the gateway must run on the same Coolify server, on the `coolify` network. Parents see the birth star panel once the URL is set. Mark the key as a secret. |
 | `SOOTA_TIMEOUT_SECONDS`, `SOOTA_AYANAMSHA`, `SOOTA_NUMEROLOGY_SYSTEM`, `BIRTH_STAR_RATE`, `PLACE_SEARCH_RATE` | No | How long to wait for an answer, Soota's ayanamsha index (2 is Lahiri), `chaldean` or `pythagorean`, and readings and place searches per board. |

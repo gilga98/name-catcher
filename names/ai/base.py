@@ -17,12 +17,18 @@ class AIRateLimited(AIError):
     """The backend asked us to slow down, so the same request is worth trying again later."""
 
 
+class RespelledName(BaseModel):
+    given: str
+    sounds_like: str
+
+
 class NameIdea(BaseModel):
     name: str
     native_script: str
     meaning: str
     origin: str
     respelling: str
+    sounds_like: str
     speech_lang: str
     gender: str
     rarity: str
@@ -49,6 +55,7 @@ class SuggestionRequest:
     overused: list[str] = field(default_factory=list)
     genres: list[str] = field(default_factory=list)
     family_suggested: list[str] = field(default_factory=list)
+    shown: list[str] = field(default_factory=list)
 
 
 class NameSuggester(Protocol):
@@ -56,9 +63,9 @@ class NameSuggester(Protocol):
 
     def describe_many(self, names: list[str], genres: list[str]) -> list[DescribedIdea]: ...
 
+    def respell_many(self, names: list[str]) -> list[RespelledName]: ...
 
-class Speaker(Protocol):
-    def speak(self, text: str) -> bytes: ...
+
 
 
 @lru_cache(maxsize=1)

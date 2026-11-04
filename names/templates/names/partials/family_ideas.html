@@ -7,6 +7,9 @@
 {% elif not pending %}
 <p class="hint">No ideas to tap right now. Type your own below.</p>
 {% endif %}
+{% if no_new %}<p class="hint" role="status">No new ideas right now. Try again later.</p>{% endif %}
 {% if pending %}
-<p class="thinking" role="status" hx-post="{% url 'family_ideas' token %}" hx-trigger="every 2s" hx-target="closest [data-ideas]" hx-swap="innerHTML">Finding more ideas. You can type your own while you wait.</p>
+<p class="thinking" role="status" hx-post="{% url 'family_ideas' token %}" hx-vals='{"refreshing": "1"}' hx-trigger="every 2s" hx-target="closest [data-ideas]" hx-swap="innerHTML">Finding more ideas. You can type your own while you wait.</p>
+{% elif can_refresh %}
+<button class="z-button z-button-text ideas-refresh" type="button" hx-post="{% url 'refresh_family_ideas' token %}" hx-target="closest [data-ideas]" hx-swap="innerHTML" hx-disabled-elt="this">{% icon "spark" %} New ideas</button>
 {% endif %}

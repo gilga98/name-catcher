@@ -395,7 +395,8 @@ def test_cards_say_when_a_name_has_a_birth_sound(client, board):
 
 def test_llm_ideas_still_work_with_a_star(board, monkeypatch):
     idea = NameIdea(
-        name="Tilak", native_script="", meaning="A mark", origin="Sanskrit", respelling="TI-lak", speech_lang="hi-IN",
+        name="Tilak", native_script="", meaning="A mark", origin="Sanskrit", respelling="TI-lak",
+        sounds_like="tilak", speech_lang="hi-IN",
         gender="boy", rarity="uncommon", style="classic", genres=[], insight="", surname_fit="",
     )  # fmt: skip
     seen = {}
