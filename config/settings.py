@@ -4,6 +4,7 @@ from pathlib import Path
 
 import environ
 from csp.constants import NONE, SELF, UNSAFE_INLINE
+from redis import ConnectionPool
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env()
@@ -73,6 +74,7 @@ DATABASES["default"] |= {"CONN_MAX_AGE": 60, "CONN_HEALTH_CHECKS": True}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REDIS_URL = env("REDIS_URL", default="")
+HUEY_WORKERS = env.int("HUEY_WORKERS", default=4)
 if REDIS_URL:
     # A Redis outage must not take the site down: reads miss, sessions fall back to the database,
     # and rate-limited actions pause because their counters can't be trusted.
@@ -91,10 +93,12 @@ if REDIS_URL:
     HUEY = {
         "huey_class": "huey.PriorityRedisHuey",
         "name": "name_catcher",
-        "url": REDIS_URL,
+        # Longer than the consumer's 1 second blocking read, short enough that an outage can't stall a page for long.
+        "connection_pool": ConnectionPool.from_url(REDIS_URL, socket_connect_timeout=2, socket_timeout=5),
         "immediate": False,
+        "results": False,  # Tasks return nothing: the outcome of the work is on the Job row.
         "consumer": {
-            "workers": env.int("HUEY_WORKERS", default=2),
+            "workers": HUEY_WORKERS,
             "worker_type": "thread",
         },
     }
@@ -204,6 +208,7 @@ CONTENT_SECURITY_POLICY = {
         "font-src": [SELF, CDN_KIT, CDN_FONTS],
         "img-src": [SELF, "data:"],
         "connect-src": [SELF],
+        "media-src": [SELF, "blob:"],  # The natural voice plays from a blob, once its recording has been fetched.
         "frame-ancestors": [NONE],
         "base-uri": [SELF],
         # Chrome also applies this to redirects after a submit, which is how the Google button leaves the site.
@@ -219,7 +224,8 @@ GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
 GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-3.5-flash-lite")
 GEMINI_TTS_MODEL = env("GEMINI_TTS_MODEL", default="gemini-3.8-flash-lite-tts")
 GEMINI_TTS_VOICE = env("GEMINI_TTS_VOICE", default="Kore")
-GEMINI_TIMEOUT_MS = env.int("GEMINI_TIMEOUT_MS", default=20000)
+# Runs on the worker, where nobody is held up. Every attempt together must stay under jobs.LEASE.
+GEMINI_TIMEOUT_MS = env.int("GEMINI_TIMEOUT_MS", default=60000)
 GEMINI_ATTEMPTS = env.int("GEMINI_ATTEMPTS", default=2)
 
 # Soota works out birth stars. Until SOOTA_API_URL is set, nobody is asked for birth details.

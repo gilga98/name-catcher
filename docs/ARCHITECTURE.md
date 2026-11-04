@@ -85,7 +85,7 @@ sequenceDiagram
 
 ## Background work
 
-Nothing talks to a third party while a person waits, except the Google sign-in callback, which has to finish before the page can load, and place of birth search, whose answer is what the person is waiting for. Jobs are rows in the database and drained by Huey in a separate worker container using Redis with task prioritization (`names/jobs.py`). Retries use Huey's task scheduling, and `manage.py run_jobs` picks up anything stranded if a worker restarts.
+Nothing talks to a third party while a person waits, except the Google sign-in callback, which has to finish before the page can load, and place of birth search, whose answer is what the person is waiting for. Jobs are rows in the database and drained by Huey in a separate worker container using Redis with task prioritization, and one worker thread is always kept free for email (`names/jobs.py`). Retries use Huey's task scheduling, and `manage.py run_jobs` picks up anything stranded if a worker restarts.
 
 | Work | Person sees | Then |
 |---|---|---|

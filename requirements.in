@@ -15,3 +15,4 @@ django-redis
 httpx
 PyJWT[crypto]
 huey
+redis

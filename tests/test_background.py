@@ -1,3 +1,4 @@
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -8,6 +9,7 @@ from django.core.mail import send_mail
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from huey.contrib.djhuey import HUEY
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from names import catalog, jobs, services
 from names.accounts import record_consent
@@ -464,12 +466,6 @@ def test_huey_prioritizes_mail_over_llm(board):
 
 
 def test_huey_schedules_retry_on_failure(board, monkeypatch):
-    scheduled = []
-    monkeypatch.setattr(
-        jobs.drain_queue,
-        "schedule",
-        lambda args, delay, priority=None: scheduled.append((args, delay, priority)),
-    )
     monkeypatch.setattr("names.tasks.send_email", lambda job: (_ for _ in ()).throw(ConnectionError("down")))
 
     with override_settings(**PARK):
@@ -478,5 +474,55 @@ def test_huey_schedules_retry_on_failure(board, monkeypatch):
         job.refresh_from_db()
         assert job.status == Job.Status.QUEUED
         assert job.attempts == 1
-        assert scheduled == [([jobs.MAIL], jobs.RETRY_SECONDS * 1, jobs.PRIORITIES[jobs.MAIL])]
+    retry = HUEY.dequeue()
+    assert retry.args == (jobs.MAIL,)
+    assert retry.kwargs == {}
+    assert retry.eta is not None
+    assert retry.priority == jobs.PRIORITIES[jobs.MAIL]
+
+
+def _redis_down(*args, **kwargs):
+    raise RedisConnectionError("down")
+
+
+def test_a_redis_outage_never_fails_the_page_and_the_job_waits(board, client, monkeypatch):
+    monkeypatch.setattr(HUEY, "enqueue", _redis_down)
+    with override_settings(**PARK), TestCase.captureOnCommitCallbacks(execute=True):
+        response = client.post(reverse("suggest", args=[board.parent_token]), **HTMX)
+    assert response.status_code == 200
+    assert Job.objects.get(kind="suggest").status == Job.Status.QUEUED
+
+
+def test_a_redis_outage_while_retrying_leaves_the_job_to_run_jobs(monkeypatch):
+    monkeypatch.setattr(HUEY, "enqueue", _redis_down)
+    monkeypatch.setattr("names.tasks.send_email", lambda job: (_ for _ in ()).throw(ConnectionError("down")))
+    with override_settings(**PARK):
+        job = jobs.enqueue(jobs.MAIL, "send_email", {"to": "a@example.com"})
+        jobs.drain(jobs.MAIL)
+    job.refresh_from_db()
+    assert job.status == Job.Status.QUEUED
+
+
+def test_polling_a_waiting_job_doesnt_flood_the_queue(board, client):
+    with override_settings(**PARK), TestCase.captureOnCommitCallbacks(execute=True):
+        client.post(reverse("suggest", args=[board.parent_token]), **HTMX)
+        job = Job.objects.get(kind="suggest")
+        for _ in range(10):
+            client.get(reverse("ai_job", args=[board.parent_token, job.pk]), **HTMX)
+    assert HUEY.pending_count() == 2  # The job itself, and one nudge in case its worker has gone.
+
+
+def test_slow_work_cant_take_the_thread_kept_for_mail(board, monkeypatch):
+    monkeypatch.setattr(jobs, "_slow_slots", threading.BoundedSemaphore(1))
+    drained = []
+    monkeypatch.setattr(jobs, "drain", drained.append)
+    jobs._slow_slots.acquire()
+    jobs.drain_queue.call_local(jobs.LLM)
+    jobs.drain_queue.call_local(jobs.SOOTA)
+    jobs.drain_queue.call_local(jobs.MAIL)
+    assert drained == [jobs.MAIL]
+    jobs._slow_slots.release()
+    jobs.drain_queue.call_local(jobs.LLM)
+    assert drained == [jobs.MAIL, jobs.LLM]
+    assert jobs._slow_slots.acquire(blocking=False)
 

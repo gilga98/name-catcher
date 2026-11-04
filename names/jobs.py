@@ -1,19 +1,22 @@
 """Runs slow third-party work off the request path. A person never waits on an email server, an LLM or Soota.
 
 Jobs live in the database, so they survive restarts. A separate Huey worker container drains them from Redis queues.
-Work is prioritized so a slow LLM call can't delay a sign-in code.
+Mail goes first in the queue and always has a thread of its own, so a slow LLM call can't delay a sign-in code.
 `manage.py run_jobs` picks up anything stranded if a process dies with no traffic to follow.
 """
 
 import logging
+import threading
 from datetime import timedelta
 from importlib import import_module
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 from huey.contrib.djhuey import db_task
+from redis.exceptions import RedisError
 
 from .ai.base import AIError
 from .models import Board, Job
@@ -30,11 +33,22 @@ SOOTA_GIVES_UP_AFTER = timedelta(hours=1)
 RETRIES = {"send_email": 5, "read_birth_star": 2}
 RETRY_SECONDS = 30
 PRIORITIES = {MAIL: 100, SOOTA: 50, LLM: 10}
+NUDGE_SECONDS = 30
+# Priority only orders what's waiting. Without this, a few LLM calls could hold every thread and delay a sign-in code.
+_slow_slots = threading.BoundedSemaphore(max(settings.HUEY_WORKERS - 1, 1))
 
 
 @db_task()
 def drain_queue(queue: str) -> None:
-    drain(queue)
+    if queue == MAIL:
+        drain(queue)
+        return
+    if not _slow_slots.acquire(blocking=False):
+        return  # Every slot is already draining, and each keeps going until nothing is left.
+    try:
+        drain(queue)
+    finally:
+        _slow_slots.release()
 
 
 def enqueue(queue: str, kind: str, payload: dict, *, board: Board | None = None, dedupe: str = "") -> Job:
@@ -44,7 +58,7 @@ def enqueue(queue: str, kind: str, payload: dict, *, board: Board | None = None,
         just_failed = Q(status=Job.Status.FAILED, updated_at__gte=timezone.now() - RECENT_FAILURE)
         existing = Job.objects.filter(active | just_failed, dedupe=dedupe).order_by("-pk").first()
         if existing:
-            kick(queue)
+            nudge(queue)
             return existing
     job = Job.objects.create(queue=queue, kind=kind, payload=payload, board=board, dedupe=dedupe)
     kick(queue)
@@ -55,8 +69,21 @@ def kick(queue: str) -> None:
     if settings.JOBS_EAGER:
         drain(queue)
         return
-    priority = PRIORITIES.get(queue, 0)
-    transaction.on_commit(lambda: drain_queue(queue, priority=priority))
+    transaction.on_commit(lambda: _wake(queue))
+
+
+def nudge(queue: str) -> None:
+    """For pages polling on work already queued, in case its worker has gone. Their every poll needn't be a task."""
+    if settings.JOBS_EAGER or cache.add(f"jobs-nudge-{queue}", 1, NUDGE_SECONDS):
+        kick(queue)
+
+
+def _wake(queue: str, delay: int | None = None) -> None:
+    """The job is safe in the database, and `run_jobs` finds it once Redis is back, so an outage never fails a page."""
+    try:
+        drain_queue(queue, delay=delay, priority=PRIORITIES[queue])
+    except RedisError as exc:
+        logger.warning("Couldn't wake the %s queue: %s", queue, type(exc).__name__)
 
 
 def drain(queue: str) -> None:
@@ -108,11 +135,7 @@ def _handle_failure(job: Job, exc: Exception) -> None:
         job.run_after = timezone.now() + timedelta(seconds=RETRY_SECONDS * job.attempts)
         job.save(update_fields=["status", "run_after", "updated_at"])
         if not settings.JOBS_EAGER:
-            drain_queue.schedule(
-                args=[job.queue],
-                delay=RETRY_SECONDS * job.attempts,
-                priority=PRIORITIES.get(job.queue, 0),
-            )
+            _wake(job.queue, delay=RETRY_SECONDS * job.attempts)
         return
     job.status = Job.Status.FAILED
     job.payload = {}

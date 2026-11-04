@@ -108,7 +108,9 @@ qrcode==8.2
 rapidfuzz==3.14.6
     # via -r requirements.in
 redis==8.1.0
-    # via django-redis
+    # via
+    #   -r requirements.in
+    #   django-redis
 regex==2026.9.29
     # via indic-transliteration
 requests==2.34.2

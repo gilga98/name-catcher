@@ -19,7 +19,7 @@ from . import accounts, catalog, places, services
 from .ai.base import AIError
 from .analytics import allow_web_analytics
 from .forms import GENDERS, STYLES, UNIQUENESS, AddNameForm, BirthStarForm, BriefForm
-from .jobs import LLM, SOOTA, kick
+from .jobs import LLM, SOOTA, nudge
 from .models import Board, Job, Name
 from .services import Voter
 
@@ -226,7 +226,7 @@ def _birth_star_context(request: HttpRequest, form: BirthStarForm | None = None)
     failed = job is not None and job.status == Job.Status.FAILED
     pending = job is not None and not failed
     if pending:
-        kick(SOOTA)  # In case the process that was working on it has gone.
+        nudge(SOOTA)
     return {
         "birth_star_enabled": True,
         "birth_star_form": form or BirthStarForm(),
@@ -337,7 +337,7 @@ def _ai_status(request: HttpRequest, job: Job) -> HttpResponse:
     elif job.status == Job.Status.FAILED:
         context = _context(request, error=job.result.get("error"), finished=True)
     else:
-        kick(LLM)
+        nudge(LLM)
         context = _context(request, job=job, finished=False)
     return render(request, "names/partials/ai_status.html", context)
 

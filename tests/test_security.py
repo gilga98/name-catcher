@@ -567,6 +567,11 @@ def test_the_security_policy_only_allows_the_cdn_paths_we_use():
     assert "https://cdn.jsdelivr.net " not in policy and "https://cdn.jsdelivr.net;" not in policy
 
 
+def test_the_security_policy_lets_the_natural_voice_play():
+    policy = Client().get("/").headers["Content-Security-Policy"]
+    assert "media-src 'self' blob:" in policy
+
+
 @override_settings(**ACCESS)
 def test_if_cloudflare_keys_cannot_be_fetched_the_admin_stays_shut():
     _access_keys.cache_clear()
