@@ -1,3 +1,3 @@
-<div{% if pending %} hx-post="{% url 'preview_name' token %}" hx-vals='{"checking": "1"}' hx-include="closest dialog [name=text]" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
-  {% if pending %}<p class="thinking" role="status">Adding tags and meaning…</p>{% else %}{% include "names/partials/name_details.html" %}{% endif %}
+<div{% if pending %} hx-post="{% url 'preview_name' token %}" hx-vals='{"checking": "1"}' hx-include="this" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {% if pending %}<input type="hidden" name="text" value="{{ text }}"><p class="thinking" role="status">Adding tags and meaning…</p>{% else %}{% include "names/partials/name_details.html" %}{% endif %}
 </div>

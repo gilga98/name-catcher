@@ -427,7 +427,11 @@ def test_an_unknown_name_is_described_while_the_card_is_open(board):
     with override_settings(JOBS_EAGER=False):
         html = preview(board, "Zorvika").content.decode()
         assert "Adding tags and meaning" in html and 'name="text" value="Zorvika"' in html
+        assert 'hx-include="this"' in html and "closest dialog" not in html
         assert not board.names.exists()
+        still_pending = preview(board, "Zorvika", checking="1").content.decode()
+        assert "Adding tags and meaning" in still_pending and 'hx-include="this"' in still_pending
+        assert 'name="text" value="Zorvika"' in still_pending
     drain(LLM)
     response = preview(board, "Zorvika", checking="1").content.decode()
     assert "A name your family suggested" in response and "every 2s" not in response
