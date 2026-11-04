@@ -1,0 +1,36 @@
+<section id="shortlist" class="section"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <h2>Shortlist</h2>
+  {% if shortlist %}
+  <ol class="kept-list"{% if is_parent %} data-z-sortable="handle: .handle" hx-post="{% url 'rank' token %}" hx-trigger="moved" hx-include="this" hx-swap="none"{% endif %}>
+    {% for name in shortlist %}
+    <li class="kept">
+      {% if is_parent %}<input type="hidden" name="order" value="{{ name.pk }}"><span class="handle" title="Drag to reorder" aria-hidden="true">⠿</span>{% endif %}
+      <div class="kept-body">
+        <h3 class="name name-small">{{ name.text }}{% if surname %} <span class="surname">{{ surname }}</span>{% endif %}</h3>
+        {% if name.native and name.native != name.text %}<p class="native" lang="{{ name.speech_lang }}">{{ name.native }}</p>{% endif %}
+        {% include "names/partials/say.html" %}
+        {% if name.meaning %}<p class="meaning">{{ name.meaning }}</p>{% endif %}
+        {% if name.both_parents_love %}<p class="z-badge both">You both love this</p>{% endif %}
+        {% if name.variants %}
+        <div class="variants">Also written:
+          {% for variant in name.variants %}
+          <span class="variant">{{ variant }}
+            {% if is_parent %}
+            <button class="z-button z-button-text z-button-xsmall" type="button" name="variant" value="{{ variant }}" hx-post="{% url 'official' token name.pk %}" hx-target="#shortlist" hx-swap="outerHTML">Use this spelling</button>
+            <button class="z-button z-button-text z-button-xsmall" type="button" name="variant" value="{{ variant }}" hx-post="{% url 'split' token name.pk %}" hx-target="#shortlist" hx-swap="outerHTML">It's a different name</button>
+            {% endif %}
+          </span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <button class="z-button {% if name.mine %}z-button-primary{% else %}z-button-default{% endif %} vote" type="button" aria-pressed="{{ name.mine|yesno:'true,false' }}" title="{% for vote in name.votes.all %}{{ vote.voter_name }}{% if not forloop.last %}, {% endif %}{% endfor %}" hx-post="{% url 'vote' token name.pk %}" hx-target="#shortlist" hx-swap="outerHTML">{{ name.mine|yesno:"Loved,Love it" }} ({{ name.votes.all|length }})</button>
+    </li>
+    {% endfor %}
+  </ol>
+  {% elif is_parent %}
+  <p class="hint">Names you keep land here. Share the family link once you have a few.</p>
+  {% else %}
+  <p class="hint">The parents haven't kept any names yet. Suggest one below.</p>
+  {% endif %}
+</section>

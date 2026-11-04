@@ -1,0 +1,50 @@
+"""What the app needs from an LLM. Callers depend on these small interfaces, not on a vendor."""
+
+from dataclasses import dataclass, field
+from functools import lru_cache
+from typing import Protocol
+
+from django.conf import settings
+from django.utils.module_loading import import_string
+from pydantic import BaseModel
+
+
+class AIError(Exception):
+    """The AI backend could not answer. Safe to show `str(error)` to the user."""
+
+
+class NameIdea(BaseModel):
+    name: str
+    native_script: str
+    meaning: str
+    origin: str
+    respelling: str
+    speech_lang: str
+    surname_fit: str
+
+
+@dataclass(frozen=True)
+class SuggestionRequest:
+    brief: dict
+    liked: list[str] = field(default_factory=list)
+    passed: list[str] = field(default_factory=list)
+    more_like: str = ""
+
+
+class NameSuggester(Protocol):
+    def suggest(self, request: SuggestionRequest) -> list[NameIdea]: ...
+
+    def describe(self, name: str, surname: str) -> NameIdea: ...
+
+
+class SameNameJudge(Protocol):
+    def same_name(self, name_a: str, name_b: str) -> bool: ...
+
+
+class Speaker(Protocol):
+    def speak(self, text: str) -> bytes: ...
+
+
+@lru_cache(maxsize=1)
+def get_ai():
+    return import_string(settings.AI_BACKEND)()

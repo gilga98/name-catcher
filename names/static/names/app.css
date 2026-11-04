@@ -1,0 +1,92 @@
+:root {
+  --oat: #f7efea;
+  --paper: #fffaf6;
+  --ink: #2b1626;
+  --plum: #5a2150;
+  --mauve: #7b5a72;
+  --petal: #ecd9e0;
+
+  --z-bg: var(--oat);
+  --z-bg-f: var(--ink);
+  --z-card: var(--paper);
+  --z-card-f: var(--ink);
+  --z-drop: var(--paper);
+  --z-drop-f: var(--ink);
+  --z-primary: var(--plum);
+  --z-primary-f: #fff;
+  --z-muted-f: var(--mauve);
+  --z-focus: var(--plum);
+
+  --serif: "Newsreader Variable", Georgia, serif;
+  --sans: "Manrope Variable", system-ui, sans-serif;
+}
+.dark {
+  --oat: #1f1320;
+  --paper: #2a1b2c;
+  --ink: #f4e8ee;
+  --plum: #e5bcd6;
+  --mauve: #bda3b5;
+  --petal: #40293f;
+  --z-primary-f: #2b1626;
+}
+
+body { background: var(--oat); color: var(--ink); font-family: var(--sans); line-height: 1.55; }
+.page { max-width: 40rem; margin-inline: auto; padding: 1.5rem 1rem 5rem; }
+.wordmark { display: inline-flex; gap: .5rem; align-items: center; font-weight: 600; color: var(--ink); text-decoration: none; }
+
+h1, h2, h3, .name { font-family: var(--serif); font-weight: 400; color: var(--ink); }
+.hero { padding-block: 3rem 2rem; }
+.hero h1 { font-size: clamp(2.75rem, 11vw, 4.5rem); line-height: 1.02; letter-spacing: -.02em; margin: 0 0 1rem; }
+.hero p { max-width: 34rem; font-size: 1.0625rem; margin: 0; }
+.hero-small { padding-block: 2rem 0; }
+.hero-small h1 { font-size: clamp(2.25rem, 8vw, 3.25rem); }
+
+.section { margin-top: 3rem; }
+.section h2 { font-size: 1.5rem; margin: 0 0 .75rem; }
+.hint, .meta { color: var(--mauve); font-size: .9375rem; margin: .5rem 0; }
+
+/* The name, read with the family name, is the hero of every card. */
+.name { font-size: clamp(2.5rem, 10vw, 3.5rem); line-height: 1.05; letter-spacing: -.015em; margin: 0; overflow-wrap: anywhere; }
+.name-small { font-size: 1.875rem; }
+.surname { color: var(--mauve); font-style: italic; font-weight: 300; }
+.native { font-size: 1.25rem; margin: .25rem 0 0; color: var(--plum); }
+.meaning { font-family: var(--serif); font-size: 1.1875rem; line-height: 1.6; margin: .5rem 0; }
+.name-card { padding-block: 1.75rem; border-top: 1px solid var(--petal); }
+.say { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .5rem 0; }
+.respelling { font-weight: 600; letter-spacing: .02em; }
+.actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+
+.field { margin-bottom: 1.5rem; border: 0; padding: 0; min-width: 0; }
+.field-row { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+.field legend, .z-form-label { display: block; font-weight: 600; margin-bottom: .5rem; }
+.chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+.chip input { position: absolute; opacity: 0; }
+.chip span { display: inline-block; padding: .5rem .875rem; min-height: 2.5rem; border: 1px solid var(--petal); border-radius: 2rem; background: var(--paper); cursor: pointer; }
+.chip input:checked + span { background: var(--plum); border-color: var(--plum); color: var(--z-primary-f); }
+.chip input:checked + span::before { content: "✓ "; }
+.chip input:focus-visible + span { outline: 2px solid var(--plum); outline-offset: 2px; }
+.submit { width: 100%; }
+
+.brief { margin-top: .75rem; }
+.brief summary { cursor: pointer; color: var(--mauve); }
+.brief form { margin-top: 1.25rem; }
+
+.kept-list { list-style: none; padding: 0; margin: 0; }
+.kept { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: flex-start; padding-block: 1.25rem; border-top: 1px solid var(--petal); background: var(--oat); }
+.kept-body { flex: 1 1 14rem; min-width: 0; }
+.handle { cursor: grab; color: var(--mauve); padding: .5rem .25rem; touch-action: none; }
+.both { background: var(--plum); color: var(--z-primary-f); padding-inline: .625rem; margin: .25rem 0; }
+.variants { font-size: .9375rem; color: var(--mauve); margin-top: .5rem; }
+.variant { display: block; color: var(--ink); }
+
+.add-form .z-input { margin-bottom: 1rem; }
+.prompt, #add-result > p { margin-top: 1rem; }
+.share { display: flex; gap: .5rem; }
+.share .z-input { flex: 1; min-width: 0; }
+
+.thinking { color: var(--mauve); margin: .75rem 0; }
+.htmx-indicator { display: none; }
+.htmx-request.htmx-indicator { display: block; }
+span.htmx-request.htmx-indicator { display: inline; margin-left: .75rem; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

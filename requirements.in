@@ -1,0 +1,12 @@
+Django~=5.2
+django-environ
+django-htmx
+django-csp
+django-ratelimit
+whitenoise
+gunicorn
+psycopg[binary]
+google-genai
+rapidfuzz
+indic-transliteration
+Unidecode

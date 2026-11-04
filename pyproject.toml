@@ -1,0 +1,16 @@
+[tool.ruff]
+line-length = 120
+extend-exclude = ["names/migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "C90", "S", "UP"]
+ignore = ["B008"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.test_settings"

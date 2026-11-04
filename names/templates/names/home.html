@@ -1,0 +1,13 @@
+{% extends "names/base.html" %}
+{% block content %}
+<header class="hero">
+  <h1>Find a name you'll both love.</h1>
+  <p>Pick what matters to you. You'll get names with their meanings and how to say them, then your family can vote on your favourites.</p>
+</header>
+<form method="post">
+  {% csrf_token %}
+  {% include "names/partials/brief_fields.html" with form=form %}
+  <button class="z-button z-button-primary z-button-large submit" type="submit">Show me names</button>
+  <p class="hint">Everything is optional. No account needed.</p>
+</form>
+{% endblock %}

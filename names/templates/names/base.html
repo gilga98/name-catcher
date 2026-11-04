@@ -1,0 +1,25 @@
+{% load static %}<!doctype html>
+<html lang="en" class="z-layout-small">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false}'>
+  <title>{% block title %}Naamadeva{% endblock %}</title>
+  <link rel="icon" href="{% static 'names/bloom.svg' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/0builddotdev/0build@0.6.13/dist/css/kit.min.css" integrity="sha384-+2+2Cr0orSHL+ewpllQ7JlETsvOSnnypIXkeNxs2SMkdEN5ZSwBd7FIcxeXnroau" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/newsreader@5.3.0/index.css" integrity="sha384-8NLzpOqclXFx6wm1sfGm5zx5dh3zD77epakW9GinxqlLtlFAjX8iOESHFlVFb1pv" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/manrope@5.3.0/index.css" integrity="sha384-GXCmGymRhL7Vub6rkStcHE8E7jrimQAroSDZEYACwFxCIuC+CzKHkG1GuiJDlxs7" crossorigin="anonymous">
+  <link rel="stylesheet" href="{% static 'names/app.css' %}">
+  <script src="{% static 'names/theme.js' %}"></script>
+  <script src="https://cdn.jsdelivr.net/gh/0builddotdev/0build@0.6.13/dist/js/uikit.min.js" integrity="sha384-2AZCsdmvj4npIcen/Pv7TV9F1lXpKBA1WDKnPtr7ln72FrycFJD5ZGVS9sNiZWgh" crossorigin="anonymous" defer></script>
+  <script src="{% static 'django_htmx/htmx-2.min.js' %}" defer></script>
+  <script src="{% static 'names/app.js' %}" defer></script>
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <main class="page">
+    <a class="wordmark" href="{% url 'home' %}"><img src="{% static 'names/bloom.svg' %}" alt="" width="24" height="24">Naamadeva</a>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<div class="field">
+  <label class="z-form-label" for="{{ form.surname.id_for_label }}">Family name</label>
+  <input class="z-input" type="text" id="{{ form.surname.id_for_label }}" name="surname" maxlength="40" value="{{ form.surname.value|default:'' }}" placeholder="So you can hear the full name" autocomplete="family-name">
+</div>
+<fieldset class="field"><legend class="z-form-label">Who is this name for?</legend>
+  <div class="chips">{% for choice in form.gender %}<label class="chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
+</fieldset>
+<fieldset class="field"><legend class="z-form-label">Which roots feel like home?</legend>
+  <div class="chips">{% for choice in form.origins %}<label class="chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
+</fieldset>
+<fieldset class="field"><legend class="z-form-label">What should it mean?</legend>
+  <div class="chips">{% for choice in form.themes %}<label class="chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
+</fieldset>
+<fieldset class="field"><legend class="z-form-label">What style?</legend>
+  <div class="chips">{% for choice in form.style %}<label class="chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
+</fieldset>
+<div class="field-row">
+  <div class="field">
+    <label class="z-form-label" for="{{ form.starts_with.id_for_label }}">Starts with</label>
+    <input class="z-input" type="text" id="{{ form.starts_with.id_for_label }}" name="starts_with" maxlength="10" value="{{ form.starts_with.value|default:'' }}" placeholder="A letter or syllable, like Che">
+  </div>
+  <div class="field">
+    <label class="z-form-label" for="{{ form.avoid.id_for_label }}">Names to avoid</label>
+    <input class="z-input" type="text" id="{{ form.avoid.id_for_label }}" name="avoid" maxlength="200" value="{{ form.avoid.value|default:'' }}" placeholder="Cousins, exes, that one teacher">
+  </div>
+</div>

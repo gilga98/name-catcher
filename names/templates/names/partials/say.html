@@ -1,0 +1,5 @@
+<p class="say">
+  {% if name.respelling %}<span class="respelling">{{ name.respelling }}</span>{% endif %}
+  <button class="z-button z-button-ghost z-button-xsmall" type="button" data-say="{{ name.native|default:name.text }}" data-lang="{{ name.speech_lang }}" aria-label="Hear {{ name.text }} with your device's voice">Hear it</button>
+  <button class="z-button z-button-ghost z-button-xsmall" type="button" data-audio="{% url 'audio' token name.pk %}" aria-label="Hear {{ name.text }} in a natural voice">Natural voice</button>
+</p>
