@@ -398,7 +398,11 @@ def test_a_family_gets_a_known_spelling_from_the_catalogue(board):
     [
         (
             {"text": "Lakshmi", "native": "लक्ष्मी", "speech_lang": "hi-IN", "sounds_like": "lukshmee"},
-            "लक्ष्मी", "hi-IN", "lukshmee",
+            "lukshmee", "en-IN", "lukshmee",
+        ),
+        (
+            {"text": "Lakshmi", "native": "लक्ष्मी", "speech_lang": "hi-IN", "respelling": "LUK-shmee"},
+            "lukshmee", "en-IN", "lukshmee",
         ),
         (
             {"text": "Priya", "native": "Priya", "speech_lang": "hi-IN", "sounds_like": "preeya"},
@@ -420,7 +424,7 @@ def test_the_card_gives_the_phone_both_ways_to_say_it(board, client):
         respelling="LUK-shmee", status=Name.Status.REVIEW,
     )  # fmt: skip
     page = client.get(reverse("board", args=[board.parent_token])).content.decode()
-    assert 'data-say="लक्ष्मी"' in page and 'data-lang="hi-IN"' in page and 'data-fallback="lukshmee"' in page
+    assert 'data-say="lukshmee"' in page and 'data-lang="en-IN"' in page and 'data-fallback="lukshmee"' in page
     assert "data-audio" not in page
 
 

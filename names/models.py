@@ -80,22 +80,17 @@ class Name(models.Model):
         return self.numerology if self.numerology.get("text") == self.text else None
 
     @property
-    def _has_native_script(self) -> bool:
-        return bool(self.native) and not self.native.isascii()
-
-    @property
     def spoken_text(self) -> str:
-        """The script of its origin is what a voice for that language reads best."""
-        return self.native if self._has_native_script else self.spoken_fallback
+        """Spelled by sound, an English voice gets close."""
+        return self.sounds_like or self.respelling.replace("-", "").lower() or self.text
 
     @property
     def spoken_lang(self) -> str:
-        return (self.speech_lang or FALLBACK_VOICE) if self._has_native_script else FALLBACK_VOICE
+        return FALLBACK_VOICE
 
     @property
     def spoken_fallback(self) -> str:
-        """For a device with no voice for that language. Spelled by sound, an English voice gets close."""
-        return self.sounds_like or self.text
+        return self.spoken_text
 
     @property
     def needs_number(self) -> bool:

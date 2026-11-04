@@ -29,20 +29,28 @@ function voiceFor(lang) {
     || matching[0];
 }
 
+let activeUtterance;
 let voiceTimer;
 
 // Some voices fail with an error and others never start, so both count as silence. A newer tap cancels this one, which isn't.
 function speak(text, lang, voice, onSilent) {
   const utterance = new SpeechSynthesisUtterance(text);
+  activeUtterance = utterance;
   utterance.lang = lang;
   if (voice) utterance.voice = voice;
-  const silent = () => {
+  const cleanup = () => {
     clearTimeout(voiceTimer);
+    if (activeUtterance === utterance) activeUtterance = null;
+  };
+  const silent = () => {
+    cleanup();
     speechSynthesis.cancel();
     onSilent();
   };
   utterance.addEventListener("start", () => clearTimeout(voiceTimer));
+  utterance.addEventListener("end", cleanup);
   utterance.addEventListener("error", (event) => {
+    cleanup();
     if (event.error !== "canceled" && event.error !== "interrupted") silent();
   });
   voiceTimer = setTimeout(silent, VOICE_START_MS);
@@ -55,7 +63,9 @@ function say(button) {
     return;
   }
   clearTimeout(voiceTimer);
-  speechSynthesis.cancel();
+  if (speechSynthesis.speaking || speechSynthesis.pending) {
+    speechSynthesis.cancel();
+  }
   speechSynthesis.resume(); // Some browsers stay paused after the page has been in the background.
   const spelled = () => speak(button.dataset.fallback, FALLBACK_VOICE, voiceFor(FALLBACK_VOICE), () => toast(NO_SOUND));
   const voice = voiceFor(button.dataset.lang);
