@@ -1,7 +1,7 @@
 """Runs slow third-party work off the request path. A person never waits on an email server, an LLM or Soota.
 
 Jobs live in the database, so they survive restarts. A separate Huey worker container drains them from Redis queues.
-Each kind of work has its own queue, so a slow LLM call can't delay a sign-in code.
+Work is prioritized so a slow LLM call can't delay a sign-in code.
 `manage.py run_jobs` picks up anything stranded if a process dies with no traffic to follow.
 """
 
@@ -29,6 +29,7 @@ RECENT_FAILURE = timedelta(minutes=1)
 SOOTA_GIVES_UP_AFTER = timedelta(hours=1)
 RETRIES = {"send_email": 5, "read_birth_star": 2}
 RETRY_SECONDS = 30
+PRIORITIES = {MAIL: 100, SOOTA: 50, LLM: 10}
 
 
 @db_task()
@@ -54,7 +55,8 @@ def kick(queue: str) -> None:
     if settings.JOBS_EAGER:
         drain(queue)
         return
-    transaction.on_commit(lambda: drain_queue(queue))
+    priority = PRIORITIES.get(queue, 0)
+    transaction.on_commit(lambda: drain_queue(queue, priority=priority))
 
 
 def drain(queue: str) -> None:
@@ -106,7 +108,11 @@ def _handle_failure(job: Job, exc: Exception) -> None:
         job.run_after = timezone.now() + timedelta(seconds=RETRY_SECONDS * job.attempts)
         job.save(update_fields=["status", "run_after", "updated_at"])
         if not settings.JOBS_EAGER:
-            drain_queue.schedule(args=[job.queue], delay=RETRY_SECONDS * job.attempts)
+            drain_queue.schedule(
+                args=[job.queue],
+                delay=RETRY_SECONDS * job.attempts,
+                priority=PRIORITIES.get(job.queue, 0),
+            )
         return
     job.status = Job.Status.FAILED
     job.payload = {}

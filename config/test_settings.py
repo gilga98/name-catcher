@@ -15,3 +15,8 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 EMAIL_DELIVERY_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 JOBS_EAGER = True
 AI_ENRICH_BATCH_WINDOW_SECONDS = 0
+HUEY = {
+    "huey_class": "huey.MemoryHuey",
+    "name": "name_catcher",
+    "immediate": False,
+}

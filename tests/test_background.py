@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.cache import cache
 from django.core.mail import send_mail
-from django.test import Client, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from huey.contrib.djhuey import HUEY
 
@@ -443,22 +443,33 @@ def test_admin_job_list_never_shows_message_contents(settings):
 
 
 def test_huey_drain_queue_task_executes_pending_work(board):
-    from huey.contrib.djhuey import HUEY
-
-    with override_settings(**PARK):
+    with override_settings(**PARK), TestCase.captureOnCommitCallbacks(execute=True):
         job = jobs.enqueue(jobs.LLM, "family_ideas", {"board": board.pk})
         assert job.status == Job.Status.QUEUED
-        jobs.drain_queue(jobs.LLM)
-        task = HUEY.dequeue()
-        assert task is not None
-        HUEY.execute(task)
-        job.refresh_from_db()
-        assert job.status == Job.Status.DONE
+    task = HUEY.dequeue()
+    assert task is not None
+    HUEY.execute(task)
+    job.refresh_from_db()
+    assert job.status == Job.Status.DONE
+
+
+def test_huey_prioritizes_mail_over_llm(board):
+    with override_settings(**PARK), TestCase.captureOnCommitCallbacks(execute=True):
+        jobs.enqueue(jobs.LLM, "family_ideas", {"board": board.pk})
+        jobs.enqueue(jobs.MAIL, "send_email", {"to": "a@example.com"})
+    task1 = HUEY.dequeue()
+    task2 = HUEY.dequeue()
+    assert task1.args == (jobs.MAIL,)
+    assert task2.args == (jobs.LLM,)
 
 
 def test_huey_schedules_retry_on_failure(board, monkeypatch):
     scheduled = []
-    monkeypatch.setattr(jobs.drain_queue, "schedule", lambda args, delay: scheduled.append((args, delay)))
+    monkeypatch.setattr(
+        jobs.drain_queue,
+        "schedule",
+        lambda args, delay, priority=None: scheduled.append((args, delay, priority)),
+    )
     monkeypatch.setattr("names.tasks.send_email", lambda job: (_ for _ in ()).throw(ConnectionError("down")))
 
     with override_settings(**PARK):
@@ -467,5 +478,5 @@ def test_huey_schedules_retry_on_failure(board, monkeypatch):
         job.refresh_from_db()
         assert job.status == Job.Status.QUEUED
         assert job.attempts == 1
-        assert scheduled == [([jobs.MAIL], jobs.RETRY_SECONDS * 1)]
+        assert scheduled == [([jobs.MAIL], jobs.RETRY_SECONDS * 1, jobs.PRIORITIES[jobs.MAIL])]
 

@@ -89,7 +89,7 @@ if REDIS_URL:
     }
     DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
     HUEY = {
-        "huey_class": "huey.RedisHuey",
+        "huey_class": "huey.PriorityRedisHuey",
         "name": "name_catcher",
         "url": REDIS_URL,
         "immediate": False,
@@ -104,7 +104,7 @@ else:
     HUEY = {
         "huey_class": "huey.MemoryHuey",
         "name": "name_catcher",
-        "immediate": False,
+        "immediate": True,
     }
 SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
 
