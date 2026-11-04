@@ -39,6 +39,7 @@ MIDDLEWARE = [
     "config.health.HealthCheckMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "names.middleware.CloudflareAccessMiddleware",
+    "names.middleware.UncachedStaticMissMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "csp.middleware.CSPMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",

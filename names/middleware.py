@@ -50,6 +50,19 @@ class CloudflareAccessMiddleware:
         return self.get_response(request)
 
 
+class UncachedStaticMissMiddleware:
+    """During a deploy the old container can 404 a new asset. Stored by Cloudflare or a browser, that breaks the page for hours."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if response.status_code == 404 and request.path.startswith(settings.STATIC_URL):
+            response["Cache-Control"] = "no-store"
+        return response
+
+
 class AIErrorMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response

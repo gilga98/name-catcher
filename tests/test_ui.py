@@ -29,3 +29,11 @@ def test_the_brief_works_as_one_form_without_scripts(client):
     assert "data-wizard" in html
     assert html.count("data-step") == 6
     assert 'type="submit"' in html
+
+
+@pytest.mark.django_db
+def test_only_a_missing_static_file_is_kept_out_of_caches(client):
+    missing = client.get("/static/names/app.0000000000.js")
+    assert missing.status_code == 404
+    assert missing["Cache-Control"] == "no-store"
+    assert "Cache-Control" not in client.get("/no-such-page")
