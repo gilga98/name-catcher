@@ -42,6 +42,7 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 | `LLM_WORKERS` | No | Worker threads for LLM calls, on their own queue. Defaults to 3. |
 | `TIME_ZONE` | No | For logs and dates shown on pages. Defaults to `Asia/Kolkata`. |
 | `AI_RATE_PER_IP`, `AI_RATE_PER_BOARD`, `AI_RATE_GLOBAL` | No | Limits on LLM spend, narrowest first. A request stopped by a narrow one doesn't count against the wider ones. |
+| `FAMILY_REFRESH_RATE`, `AI_CALLS_KEPT_FOR_PARENTS` | No | How often relatives can ask for new AI ideas per board, and how many of the parents' monthly requests they can never use. |
 | `BOARD_CREATE_RATE`, `BOARD_CREATE_PER_USER`, `BOARD_RATE_PER_IP`, `ADD_RATE_PER_IP`, `GUEST_VOTERS_PER_IP` | No | Per-visitor and per-account limits. Generous, because mobile networks in India put many households behind one address. |
 | `GEMINI_MODEL` | No | Change models without touching code. |
 | `AI_RESPELL_CALLS_PER_DAY`, `AI_RESPELL_SPACING_SECONDS`, `AI_RESPELL_PAUSE_SECONDS` | No | Filling in spellings by sound for names that don't have one. Defaults to 20 calls a day, a minute apart, stopping for an hour if Gemini says to slow down. Each call covers up to `AI_ENRICH_BATCH_SIZE` names. |

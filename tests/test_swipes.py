@@ -1,12 +1,16 @@
+from dataclasses import replace
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import Client
+from django.test import Client, override_settings
 from django.urls import reverse
 
 from names import catalog, services
 from names.accounts import profile_of, record_consent
-from names.models import Board, CatalogName, Name, Swipe
+from names.ai.base import AIError
+from names.ai.stub import StubAI
+from names.models import Board, CatalogName, Job, Name, Swipe
 from names.services import Voter
 
 pytestmark = pytest.mark.django_db
@@ -235,6 +239,137 @@ def test_family_ideas_call_the_llm_once_per_brief_however_many_relatives_visit(b
     board.save()
     Client().post(url, **HTMX)
     assert board.members.get().ai_calls.count() == 2
+
+
+def refresh(board):
+    return Client().post(reverse("refresh_family_ideas", args=[board.guest_token]), **HTMX)
+
+
+def ideas_on_show(response):
+    stub_names = ("Aarav", "Anaya", "Ishaan", "Meera", "Nila", "Kavya", "Rohan", "Tara")
+    return {name for name in stub_names if name.encode() in response.content}
+
+
+def test_refreshing_family_ideas_asks_the_llm_for_different_names(board):
+    parent(board, "a@example.com")
+    first = ideas_on_show(Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX))
+    second = ideas_on_show(refresh(board))
+    assert first and second and not first & second
+    assert board.members.get().ai_calls.count() == 2
+
+
+def test_refreshed_names_are_what_every_relative_sees_next(board):
+    parent(board, "a@example.com")
+    Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX)
+    second = ideas_on_show(refresh(board))
+    assert ideas_on_show(Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX)) == second
+    assert board.members.get().ai_calls.count() == 2
+
+
+def test_refreshed_names_come_before_the_catalogue(board):
+    parent(board, "a@example.com")
+    for text in ("Ahana", "Tejas", "Oviya", "Nilima", "Rudra", "Vanya", "Charu", "Dhruv", "Gauri"):
+        CatalogName.objects.create(key=catalog.phonetic_key(text), text=text, meaning="m", status="approved")
+    first = Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX)
+    assert not ideas_on_show(first)
+    html = refresh(board).content.decode()
+    assert html.index("Aarav") < html.index("Gauri")
+    assert "Ahana" not in html  # Shown before the refresh, so it has moved on.
+
+
+def test_a_failed_refresh_keeps_the_list_and_says_so(board, monkeypatch):
+    parent(board, "a@example.com")
+    first = ideas_on_show(Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX))
+
+    class Broken:
+        def suggest(self, request):
+            raise AIError("Try again in a minute.")
+
+    monkeypatch.setattr(services, "get_ai", Broken)
+    response = refresh(board)
+    assert ideas_on_show(response) == first and b"No new ideas" in response.content
+    # Only the person who asked gets told. Someone opening the link later just sees ideas.
+    assert b"No new ideas" not in Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX).content
+
+
+def test_a_refresh_that_finds_only_repeats_keeps_the_list(board, monkeypatch):
+    parent(board, "a@example.com")
+    first = ideas_on_show(Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX))
+    stub = StubAI()
+
+    class Repeating:
+        def suggest(self, request):
+            return stub.suggest(replace(request, shown=[]))
+
+    monkeypatch.setattr(services, "get_ai", Repeating)
+    response = refresh(board)
+    assert ideas_on_show(response) == first and b"No new ideas" in response.content
+
+
+def test_relatives_cant_use_the_allowance_the_parents_need(board):
+    parent(board, "a@example.com")
+    with override_settings(AI_FREE_CALLS_PER_MONTH=22):
+        assert b"New ideas" in Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX).content
+        board.members.get().ai_calls.create(kind="suggest")
+        response = refresh(board)
+        assert b"New ideas" not in response.content and b"No new ideas" in response.content
+    assert board.members.get().ai_calls.count() == 2
+
+
+@override_settings(FAMILY_REFRESH_RATE="2/d")
+def test_refreshes_are_capped_per_board(board):
+    parent(board, "a@example.com")
+    Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX)
+    calls = board.members.get().ai_calls
+    before = calls.count()
+    refresh(board), refresh(board)
+    assert calls.count() == before + 2
+    assert b"No new ideas" in refresh(board).content
+    assert calls.count() == before + 2
+
+
+def test_no_refresh_when_a_parent_has_switched_ai_off(board):
+    parent(board, "a@example.com")
+    user = board.members.get()
+    profile = profile_of(user)
+    profile.ai_enabled = False
+    profile.save()
+    assert b"New ideas" not in Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX).content
+    refresh(board)
+    assert user.ai_calls.count() == 0
+
+
+@override_settings(JOBS_EAGER=False)
+def test_tapping_refresh_twice_makes_one_call_and_shows_it_is_working(board):
+    parent(board, "a@example.com")
+    assert b"Finding more ideas" in refresh(board).content
+    refresh(board)
+    assert Job.objects.filter(board=board, kind="family_ideas").count() == 1
+
+
+def test_names_to_avoid_never_reach_relatives(board):
+    parent(board, "a@example.com")
+    CatalogName.objects.create(key=catalog.phonetic_key("Meena"), text="Meena", meaning="m", status="approved")
+    assert b"Meena" not in Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX).content
+
+
+def test_a_refresh_prompt_holds_only_names_relatives_were_shown(board, monkeypatch):
+    parent(board, "a@example.com")
+    Name.objects.create(board=board, text="Keptname", key="keptname", status=Name.Status.KEPT)
+    Client().post(reverse("add", args=[board.guest_token]), {"text": "Typedbyanaunt", "by": "Aunt"})
+    requests = []
+    stub = StubAI()
+
+    class Recording:
+        def suggest(self, request):
+            requests.append(request)
+            return stub.suggest(request)
+
+    monkeypatch.setattr(services, "get_ai", Recording)
+    Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX)
+    refresh(board)
+    assert set(requests[1].shown) == {"Aarav", "Anaya", "Ishaan", "Meera"}
+    assert "Keptname" not in str(requests[1]) and "Typedbyanaunt" not in str(requests[1])
 
 
 def test_tapped_ideas_leave_the_list(board):

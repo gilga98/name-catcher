@@ -362,7 +362,7 @@ def test_the_llm_gets_the_sounds_and_nothing_else_about_the_star(board):
 
 def test_relatives_ideas_dont_use_the_star(board):
     board.birth_star = STAR
-    assert "birth_sounds" not in services._family_request(board).brief
+    assert "birth_sounds" not in services._family_request(board, []).brief
 
 
 def test_the_browser_gets_keys_it_can_compare_with_names(board, parent):
