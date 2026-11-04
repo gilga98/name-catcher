@@ -202,7 +202,6 @@ document.body.addEventListener("htmx:responseError", (event) => {
 });
 document.body.addEventListener("htmx:sendError", () => toast("Couldn't reach the server. Check your connection."));
 document.body.addEventListener("htmx:afterRequest", (event) => {
-  if (event.detail.successful && event.target.matches("[data-idea]")) ideaSent(event.target);
   if (event.detail.successful && event.target.matches("[data-reset-on-add]")) {
     event.target.querySelector("[name=text]").value = "";
   }

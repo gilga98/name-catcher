@@ -1,0 +1,22 @@
+{% load ui %}<dialog class="preview-dialog" aria-labelledby="preview-title">
+  <article class="name-card {{ name.key|tint }}">
+    <div class="card-art">
+      <svg class="card-bloom" aria-hidden="true" focusable="false"><use href="#i-bloom"></use></svg>
+      <span class="card-glyph" aria-hidden="true">{{ name.text|first|upper }}</span>
+    </div>
+    <div class="card-body">
+      <h2 class="name" id="preview-title">{{ name.text }}{% if surname %} <span class="surname">{{ surname }}</span>{% endif %}</h2>
+      {% include "names/partials/family_preview_details.html" %}
+    </div>
+  </article>
+  <form class="preview-send" hx-post="{% url 'add' token %}" hx-target="#add-result" hx-disabled-elt="find [type=submit]" data-send-name>
+    <input type="hidden" name="text" value="{{ text }}">
+    <label class="z-form-label" for="preview-by">Your name</label>
+    <input class="z-input" id="preview-by" name="by" maxlength="40" value="{{ by }}" placeholder="Family" pattern="[^\d<>\/:@.]*" title="Just your name, without numbers or symbols" autocomplete="off">
+    <p class="hint">{% icon "eye" %}The parents see this card and the name you enter here, and we tag your suggestion automatically.</p>
+    <div class="preview-actions">
+      <button class="z-button z-button-default" type="button" data-close-preview>{% icon "x" %} Not this one</button>
+      <button class="z-button z-button-primary" type="submit">{% icon "check" %} Send</button>
+    </div>
+  </form>
+</dialog>

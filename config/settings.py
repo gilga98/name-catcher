@@ -260,7 +260,7 @@ MAX_PENDING_CONTRIBUTIONS = env.int("MAX_PENDING_CONTRIBUTIONS", default=2000)
 ACCOUNT_RETENTION_DAYS = env.int("ACCOUNT_RETENTION_DAYS", default=730)
 
 # Published in the legal pages. Change POLICY_VERSION when the policies change: everyone accepts again.
-POLICY_VERSION = "2026-11-04.9"
+POLICY_VERSION = "2026-11-04.10"
 LEGAL_ENTITY_NAME = env("LEGAL_ENTITY_NAME", default="")
 LEGAL_ADDRESS = env("LEGAL_ADDRESS", default="")
 LEGAL_JURISDICTION_CITY = env("LEGAL_JURISDICTION_CITY", default="")

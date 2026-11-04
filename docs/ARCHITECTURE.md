@@ -93,6 +93,7 @@ Nothing talks to a third party while a person waits, except the Google sign-in c
 | Tags and meaning for a name | The card at once, with details filling in | Polls every 2 seconds |
 | "Ask AI" | Keeps swiping | Cards join the deck when ready |
 | Family ideas | Catalogue ideas at once | LLM ideas join them |
+| Family preview | The card, if the name is known | Details fill in on it |
 | Name number | Usually there already. Otherwise "Working out its number…" on the card | Polls every 2 seconds. The row is deleted on success |
 | Birth star | "Working out the birth star…" | Polls every 2 seconds, then reloads the page. The row is deleted on success |
 
@@ -203,6 +204,7 @@ Assume someone will try to give the model instructions through any of this, and 
 
 - It has no tools or secrets to misuse.
 - Family ideas are read by relatives, so their prompt holds only what relatives can already see, and no text a relative typed.
+- A family preview is built from the catalogue alone and saves nothing on the board. It reads the same whether or not the name is already there, so it can't reveal what's on the board.
 - Answers lose any field holding a link or phone number, and anything that doesn't look like a name is dropped.
 - A recording is shared by key, so only text that sounds like that key is ever spoken.
 

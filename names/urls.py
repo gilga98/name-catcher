@@ -48,6 +48,7 @@ urlpatterns = [
     path("b/<str:token>/ideas", views.family_ideas, name="family_ideas"),
     path("b/<str:token>/ideas/refresh", views.refresh_family_ideas, name="refresh_family_ideas"),
     path("b/<str:token>/rank", views.rank, name="rank"),
+    path("b/<str:token>/names/preview", views.preview_name, name="preview_name"),
     path("b/<str:token>/names", views.add, name="add"),
     *[path(f"b/<str:token>/names/<int:pk>/{slug}", view, name=slug) for slug, view in name_actions.items()],
 ]

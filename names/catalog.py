@@ -133,6 +133,11 @@ def request_enrichment(text: str, key: str) -> bool:
     return True
 
 
+def being_described(key: str) -> bool:
+    waiting = [CatalogName.Enrich.PENDING, CatalogName.Enrich.RUNNING]
+    return CatalogName.objects.filter(key=key, enrich_state__in=waiting).exists()
+
+
 def queue_blank_entries(entries) -> None:
     """Admins can upload bare names and let the batches fill them in."""
     entries.filter(meaning="", enrich_state=CatalogName.Enrich.NONE).update(enrich_state=CatalogName.Enrich.PENDING)

@@ -1,7 +1,7 @@
 {% extends "names/base.html" %}
 {% load static ui %}
 {% block title %}{% if surname %}{{ surname }} baby names{% else %}Baby names{% endif %}{% endblock %}
-{% block scripts %}{% if is_parent %}<script src="{% static 'names/engine.js' %}" defer></script><script src="{% static 'names/deck.js' %}" defer></script>{% if birth_star_enabled %}<script src="{% static 'names/birth_place.js' %}" defer></script>{% endif %}{% endif %}{% endblock %}
+{% block scripts %}{% if is_parent %}<script src="{% static 'names/engine.js' %}" defer></script><script src="{% static 'names/deck.js' %}" defer></script>{% if birth_star_enabled %}<script src="{% static 'names/birth_place.js' %}" defer></script>{% endif %}{% else %}<script src="{% static 'names/family_preview.js' %}" defer></script>{% endif %}{% endblock %}
 {% block content %}
 {% if is_parent %}
 <div class="board" data-board data-active="swipe">
@@ -133,17 +133,16 @@
     </section>
     <section class="tile">
       <h2>Or add your own</h2>
-      <form id="add-name" class="add-form" hx-post="{% url 'add' token %}" hx-target="#add-result" data-reset-on-add>
+      <form id="add-name" class="add-form" hx-post="{% url 'preview_name' token %}" hx-target="#family-preview" hx-disabled-elt="find [type=submit]">
         <label class="z-form-label" for="add-text">Name, in any spelling or script</label>
         <input class="z-input" id="add-text" name="text" maxlength="40" required autocomplete="off">
-        <label class="z-form-label" for="add-by">Your name</label>
-        <input class="z-input" id="add-by" name="by" maxlength="40" value="{{ by }}" placeholder="So the parents know who suggested it">
-        <button class="z-button z-button-primary submit" type="submit">{% icon "plus" %} Add name</button>
-        <p class="hint">The parents see the name you enter here, and we tag your suggestion automatically. <a href="{% url 'privacy' %}">Privacy Policy</a></p>
+        <button class="z-button z-button-primary submit" type="submit">{% icon "eye" %} Preview</button>
+        <p class="hint">Nothing reaches the parents until you send it.{% if family_ai_on %} To build the preview, AI may describe the name you enter, even if you don't send it.{% endif %} <a href="{% url 'privacy' %}">Privacy Policy</a></p>
       </form>
       <div id="add-result"></div>
     </section>
   </div>
+  <div id="family-preview"></div>
 </div>
 {% endif %}
 {% endblock %}

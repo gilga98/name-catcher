@@ -24,6 +24,7 @@ from .services import Voter
 
 PENDING_BRIEF = "pending_brief"
 NOT_A_NAME = "Enter just the name, up to 28 letters."
+NOT_YOUR_NAME = "Enter just your name, without numbers or symbols."
 DIFFERENT_NAME = "That looks like a different name. Add it on its own."
 
 
@@ -212,7 +213,7 @@ def board_page(request: HttpRequest, token: str) -> HttpResponse:
         binned=services.binned(board) if request.is_parent else [],
         wishes=_family_context(board.brief),
         catalog_version=catalog.version(board.brief),
-        by=request.session.get("voter_name", ""),
+        family_ai_on=accounts.ai_allowed(board),
         **_birth_star_context(request),
     )
     return render(request, "names/board.html", context)
@@ -480,6 +481,42 @@ def rank(request: HttpRequest, token: str) -> HttpResponse:
     return HttpResponse(status=204)
 
 
+def _spend_preview_budget(request: HttpRequest) -> None:
+    limits = (
+        ("preview-ip", _client_ip, settings.ADD_RATE_PER_IP),
+        ("preview", _board_token, settings.ADD_RATE_PER_BOARD),
+    )
+    for group, key, rate in limits:
+        if is_ratelimited(request, group=group, key=key, rate=rate, increment=True):
+            raise Ratelimited
+
+
+@require_POST
+@with_board()
+def preview_name(request: HttpRequest, token: str) -> HttpResponse:
+    """Stores nothing about who is asking. A card checking on its details can't start anything, so it isn't limited."""
+    form = AddNameForm(request.POST)
+    if not form.is_valid():
+        return HttpResponse(NOT_A_NAME, status=422, content_type="text/plain")
+    checking = "checking" in request.POST
+    if not checking:
+        _spend_preview_budget(request)
+    text = form.cleaned_data["text"]
+    name, state = services.preview_name(request.board, text, start=not checking)
+    if state == services.Details.PENDING:
+        nudge(LLM)
+    context = _context(
+        request,
+        name=name,
+        text=text,
+        pending=state == services.Details.PENDING,
+        no_details=state == services.Details.UNAVAILABLE,
+        by=request.session.get("voter_name", ""),
+    )
+    template = "family_preview_details" if checking else "family_preview"
+    return render(request, f"names/partials/{template}.html", context)
+
+
 @require_POST
 @with_board()
 @ratelimit(group="add", key=_board_token, rate=settings.ADD_RATE_PER_BOARD, block=True)
@@ -487,10 +524,13 @@ def rank(request: HttpRequest, token: str) -> HttpResponse:
 def add(request: HttpRequest, token: str) -> HttpResponse:
     form = AddNameForm(request.POST)
     if not form.is_valid():
-        return HttpResponse(NOT_A_NAME, status=422, content_type="text/plain")
+        message = NOT_YOUR_NAME if "by" in form.errors else NOT_A_NAME
+        return HttpResponse(message, status=422, content_type="text/plain")
     _admit_guest(request)
     if form.cleaned_data["by"]:
         request.session["voter_name"] = form.cleaned_data["by"]
+    elif "by" in request.POST:
+        request.session.pop("voter_name", None)  # Cleared on the preview, so this one goes without their name.
     text = form.cleaned_data["text"]
     voter = _voter(request, request.is_parent)
     result = services.add_name(request.board, text, voter, force="force" in request.POST)

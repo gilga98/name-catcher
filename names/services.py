@@ -340,26 +340,24 @@ def add_name(board: Board, text: str, voter: Voter, *, force: bool = False) -> A
         return AddResult(hidden_duplicate=True)
     if duplicate:
         return AddResult(duplicate=duplicate)
-    language = speech_language(text)
-    name = Name.objects.create(
-        board=board,
-        text=text,
-        key=key,
-        native=text if language else "",
-        speech_lang=language,
-        suggested_by=voter.name,
-    )
+    name = _typed_name(board, text, key, suggested_by=voter.name)
+    name.save()
     if voter.is_parent:
         keep(name, voter)
     prepare_names(name.board, [name])
     return AddResult(name=name)
 
 
+def _typed_name(board: Board, text: str, key: str, **fields) -> Name:
+    language = speech_language(text)
+    return Name(board=board, text=text, key=key, native=text if language else "", speech_lang=language, **fields)
+
+
 class Details:
     READY, PENDING, UNAVAILABLE = "ready", "pending", "unavailable"
 
 
-def _copy_details(name: Name, entry: CatalogName) -> None:
+def _apply_details(name: Name, entry: CatalogName) -> None:
     details = _from_catalog(name.board, entry)
     name.meaning, name.origin = details.meaning, details.origin
     if details.native:
@@ -372,6 +370,10 @@ def _copy_details(name: Name, entry: CatalogName) -> None:
     name.speech_lang = speech_language(name.native) or details.speech_lang or name.speech_lang
     name.sounds_like = details.sounds_like
     name.surname_fit, name.insight, name.tags = details.surname_fit, details.insight, details.tags
+
+
+def _copy_details(name: Name, entry: CatalogName) -> None:
+    _apply_details(name, entry)
     name.save(
         update_fields=[
             "text", "native", "meaning", "origin", "respelling", "sounds_like", "speech_lang", "surname_fit", "insight",
@@ -392,6 +394,21 @@ def describe_name(name: Name) -> str:
         name.refresh_from_db()
         return Details.READY if name.respelling else Details.PENDING
     return Details.UNAVAILABLE
+
+
+def preview_name(board: Board, text: str, *, start: bool) -> tuple[Name, str]:
+    """The card the parents would get, saved nowhere on the board. It never looks at the board's names either, so it
+    reads the same whether or not this one is already there. Only `start` can ask for an LLM description."""
+    key = catalog.canonical_key(text)
+    if start and catalog.lookup(key) is None and accounts.ai_allowed(board):
+        catalog.request_enrichment(text, key)
+        key = catalog.canonical_key(text)  # An answer can turn this into another spelling of a known name.
+    name = _typed_name(board, text, key)
+    entry = catalog.lookup(key)
+    if entry:
+        _apply_details(name, entry)
+        return name, Details.READY
+    return name, Details.PENDING if catalog.being_described(key) else Details.UNAVAILABLE
 
 
 def prepare_names(board: Board, names: list[Name]) -> None:

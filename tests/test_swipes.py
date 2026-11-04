@@ -10,7 +10,8 @@ from names import catalog, services
 from names.accounts import profile_of, record_consent
 from names.ai.base import AIError
 from names.ai.stub import StubAI
-from names.models import Board, CatalogName, Job, Name, Swipe
+from names.jobs import LLM, drain
+from names.models import Board, CatalogName, Job, Name, Swipe, Vote
 from names.services import Voter
 
 pytestmark = pytest.mark.django_db
@@ -370,6 +371,120 @@ def test_a_refresh_prompt_holds_only_names_relatives_were_shown(board, monkeypat
     refresh(board)
     assert set(requests[1].shown) == {"Aarav", "Anaya", "Ishaan", "Meera"}
     assert "Keptname" not in str(requests[1]) and "Typedbyanaunt" not in str(requests[1])
+
+
+def preview(board, text="Oviya", **extra):
+    return Client().post(reverse("preview_name", args=[board.guest_token]), {"text": text, **extra}, **HTMX)
+
+
+def known_name(text="Oviya"):
+    key = catalog.phonetic_key(text)
+    return CatalogName.objects.create(
+        key=key, text=text, meaning="Painting", respelling="OH-vee-yaa", origin="Tamil", status="approved"
+    )
+
+
+def test_a_preview_shows_the_enriched_card_and_shares_nothing(board):
+    parent(board, "a@example.com")
+    known_name()
+    guest = Client()
+    html = guest.post(reverse("preview_name", args=[board.guest_token]), {"text": "Oviya"}, **HTMX).content.decode()
+    assert "Painting" in html and "OH-vee-yaa" in html and "Tamil" in html and "Rao" in html
+    assert not board.names.exists() and not Vote.objects.exists() and "voter" not in guest.session
+
+
+def test_the_previewed_card_is_what_the_parents_get(board):
+    client, _ = parent(board, "a@example.com")
+    known_name()
+    preview(board)
+    Client().post(reverse("add", args=[board.guest_token]), {"text": "Oviya", "by": "Maa"}, **HTMX)
+    name = board.names.get()
+    assert (name.meaning, name.respelling, name.suggested_by) == ("Painting", "OH-vee-yaa", "Maa")
+    assert "Painting" in client.get(reverse("board", args=[board.parent_token])).content.decode()
+
+
+def test_a_preview_cant_reveal_what_is_on_the_board(board):
+    parent(board, "a@example.com")
+    known_name()
+    before = preview(board).content
+    Name.objects.create(board=board, text="Oviya", key=catalog.phonetic_key("Oviya"), status=Name.Status.KEPT)
+    assert preview(board).content == before
+
+
+def test_a_preview_shows_nothing_only_parents_should_see(board):
+    parent(board, "a@example.com")
+    known_name()
+    board.birth_star = {"letter": "O", "letters": ["O"]}
+    board.save()
+    html = preview(board).content.decode()
+    for private in ("Chintu", "Aunt Meena", "Birth star", "Keep", "Similar"):
+        assert private not in html
+
+
+def test_an_unknown_name_is_described_while_the_card_is_open(board):
+    parent(board, "a@example.com")
+    with override_settings(JOBS_EAGER=False):
+        html = preview(board, "Zorvika").content.decode()
+        assert "Adding tags and meaning" in html and 'name="text" value="Zorvika"' in html
+        assert not board.names.exists()
+    drain(LLM)
+    response = preview(board, "Zorvika", checking="1").content.decode()
+    assert "A name your family suggested" in response and "every 2s" not in response
+
+
+def test_checking_on_a_card_cant_start_a_description(board):
+    parent(board, "a@example.com")
+    assert b"catalogue yet" in preview(board, "Zorvika", checking="1").content
+    assert not CatalogName.objects.exists()
+
+
+def test_a_name_stays_off_the_llm_when_a_parent_has_switched_ai_off(board):
+    parent(board, "a@example.com")
+    profile = profile_of(board.members.get())
+    profile.ai_enabled = False
+    profile.save()
+    assert b"catalogue yet" in preview(board, "Zorvika").content
+    assert not CatalogName.objects.exists()
+    assert b"AI may describe" not in Client().get(reverse("board", args=[board.guest_token])).content
+
+
+def test_a_preview_rejects_what_isnt_a_name(board):
+    assert preview(board, "<script>alert(1)</script>").status_code == 422
+    assert not CatalogName.objects.exists()
+
+
+@override_settings(ADD_RATE_PER_BOARD="2/h")
+def test_previews_are_limited_but_checking_on_one_is_not(board):
+    parent(board, "a@example.com")
+    known_name()
+    assert [preview(board).status_code for _ in range(3)] == [200, 200, 429]
+    assert preview(board, checking="1").status_code == 200
+
+
+def test_a_relative_can_change_or_clear_their_name_before_sending(board):
+    parent(board, "a@example.com")
+    known_name()
+    guest = Client()
+    url = reverse("add", args=[board.guest_token])
+    preview_url = reverse("preview_name", args=[board.guest_token])
+    guest.post(url, {"text": "Tejas", "by": "Maa"}, **HTMX)
+    assert b'value="Maa"' in guest.post(preview_url, {"text": "Oviya"}, **HTMX).content
+    guest.post(url, {"text": "Oviya", "by": ""}, **HTMX)
+    assert board.names.get(text="Oviya").suggested_by == "Family"
+    assert b'value="Maa"' not in guest.post(preview_url, {"text": "Nila"}, **HTMX).content
+
+
+def test_a_bad_name_for_the_sender_says_so(board):
+    response = Client().post(reverse("add", args=[board.guest_token]), {"text": "Oviya", "by": "Maa2"}, **HTMX)
+    assert response.status_code == 422 and b"your name" in response.content
+
+
+def test_tapping_an_idea_opens_a_preview_rather_than_sending_it(board):
+    parent(board, "a@example.com")
+    known_name()
+    html = Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX).content.decode()
+    assert reverse("preview_name", args=[board.guest_token]) in html
+    assert reverse("add", args=[board.guest_token]) + '"' not in html
 
 
 def test_tapped_ideas_leave_the_list(board):
