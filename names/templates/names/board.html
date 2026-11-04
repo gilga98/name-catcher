@@ -30,7 +30,7 @@
 
 <section class="section">
   <h2>{% if is_parent %}Add a name you already like{% else %}Suggest a name{% endif %}</h2>
-  <form id="add-name" class="add-form" hx-post="{% url 'add' token %}" hx-target="#add-result" hx-indicator="#adding" data-reset-on-add>
+  <form id="add-name" class="add-form" hx-post="{% url 'add' token %}" hx-target="#add-result" data-reset-on-add>
     <label class="z-form-label" for="add-text">Name, in any spelling or script</label>
     <input class="z-input" id="add-text" name="text" maxlength="40" required autocomplete="off">
     {% if not is_parent %}
@@ -38,7 +38,6 @@
     <input class="z-input" id="add-by" name="by" maxlength="40" value="{{ by }}" placeholder="So the parents know who suggested it">
     {% endif %}
     <button class="z-button z-button-primary" type="submit">Add name</button>
-    <span id="adding" class="thinking htmx-indicator" role="status">Checking the list…</span>
   </form>
   <div id="add-result"></div>
 </section>

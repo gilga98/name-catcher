@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.db import transaction
 
-from .ai.base import AIError, NameIdea, SuggestionRequest, get_ai
+from .ai.base import NameIdea, SuggestionRequest, get_ai
 from .dedup import ALMOST_CERTAINLY_SAME, closest, find_duplicate, phonetic_key
 from .models import Board, Name, Vote, new_token
 
@@ -74,37 +74,26 @@ def suggest_names(board: Board, more_like: str = "") -> list[Name]:
     return Name.objects.bulk_create(fresh)
 
 
-def _describe(board: Board, text: str) -> NameIdea:
-    surname = board.brief.get("surname", "")
-    try:
-        return get_ai().describe(text, surname).model_copy(update={"name": text})
-    except AIError:
-        return NameIdea(
-            name=text, native_script="", meaning="", origin="", respelling="", speech_lang="", surname_fit=""
-        )
-
-
 def add_name(board: Board, text: str, voter: Voter, *, force: bool = False) -> AddResult:
-    duplicate = None if force else find_duplicate(text, board.names.all(), _judge())
+    """Local and instant. describe_name fills in the details afterwards, so nobody waits on the LLM."""
+    duplicate = None if force else find_duplicate(text, board.names.all())
     if duplicate:
         return AddResult(duplicate=duplicate)
-    name = _build_name(board, _describe(board, text), suggested_by=voter.name)
-    name.save()
+    name = Name.objects.create(board=board, text=text, key=phonetic_key(text)[:60], suggested_by=voter.name)
     if voter.is_parent:
         keep(name, voter)
     return AddResult(name=name)
 
 
-def _judge():
-    try:
-        return get_ai()
-    except AIError:
-        return _Undecided()
-
-
-class _Undecided:
-    def same_name(self, name_a: str, name_b: str) -> bool:
-        raise AIError
+def describe_name(name: Name) -> None:
+    if name.respelling:
+        return
+    idea = get_ai().describe(name.text, name.board.brief.get("surname", ""))
+    details = _build_name(name.board, idea)
+    name.native, name.meaning, name.origin = details.native, details.meaning, details.origin
+    name.respelling = details.respelling or name.text
+    name.speech_lang, name.surname_fit = details.speech_lang, details.surname_fit
+    name.save(update_fields=["native", "meaning", "origin", "respelling", "speech_lang", "surname_fit"])
 
 
 def merge_into(name: Name, text: str, voter: Voter) -> None:

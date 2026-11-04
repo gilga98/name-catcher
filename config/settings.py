@@ -151,13 +151,14 @@ CONTENT_SECURITY_POLICY = {
 
 AI_BACKEND = env("AI_BACKEND", default="names.ai.gemini.GeminiAI")
 GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
-GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-flash-latest")
-GEMINI_TTS_MODEL = env("GEMINI_TTS_MODEL", default="gemini-2.5-flash-preview-tts")
+GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-3.5-flash-lite")
+GEMINI_TTS_MODEL = env("GEMINI_TTS_MODEL", default="gemini-3.8-flash-lite-tts")
 GEMINI_TTS_VOICE = env("GEMINI_TTS_VOICE", default="Kore")
-GEMINI_TIMEOUT_MS = env.int("GEMINI_TIMEOUT_MS", default=30000)
+GEMINI_TIMEOUT_MS = env.int("GEMINI_TIMEOUT_MS", default=20000)
 GEMINI_ATTEMPTS = env.int("GEMINI_ATTEMPTS", default=2)
 
 AI_RATE_PER_BOARD = env("AI_RATE_PER_BOARD", default="30/h")
 AI_RATE_GLOBAL = env("AI_RATE_GLOBAL", default="200/h")
+ADD_RATE_PER_BOARD = env("ADD_RATE_PER_BOARD", default="60/h")
 BOARD_CREATE_RATE = env("BOARD_CREATE_RATE", default="60/h")
 RATELIMIT_VIEW = "names.views.rate_limited"

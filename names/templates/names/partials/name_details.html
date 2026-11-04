@@ -1,0 +1,8 @@
+{% if name.respelling %}
+{% if name.native and name.native != name.text %}<p class="native" lang="{{ name.speech_lang }}">{{ name.native }}</p>{% endif %}
+{% include "names/partials/say.html" %}
+{% if name.meaning %}<p class="meaning">{{ name.meaning }}</p>{% endif %}
+{% if name.origin or name.surname_fit %}<p class="meta">{% if name.origin %}{{ name.origin }}. {% endif %}{{ name.surname_fit }}</p>{% endif %}
+{% else %}
+<button class="z-button z-button-text z-button-small" type="button" hx-post="{% url 'details' token name.pk %}" hx-trigger="load, click" hx-swap="outerHTML" hx-disabled-elt="this">Look up its meaning</button>
+{% endif %}

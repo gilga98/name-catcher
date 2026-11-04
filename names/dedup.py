@@ -4,17 +4,13 @@ import re
 from collections.abc import Iterable
 from typing import Protocol, TypeVar
 
-from django.core.cache import cache
 from indic_transliteration import detect, sanscript
 from rapidfuzz import process
 from rapidfuzz.distance import JaroWinkler
 from unidecode import unidecode
 
-from .ai.base import AIError, SameNameJudge
-
-MAYBE_SAME = 0.82  # Close enough to be worth asking about.
+MAYBE_SAME = 0.85  # Close enough to ask the person, who always confirms a merge.
 ALMOST_CERTAINLY_SAME = 0.96
-JUDGEMENT_TTL = 60 * 60 * 24 * 30
 
 _INDIC_SCRIPTS = {
     "bengali", "devanagari", "gujarati", "gurmukhi", "kannada", "malayalam", "oriya", "tamil", "telugu",
@@ -64,21 +60,5 @@ def closest(key: str, candidates: Iterable[C], cutoff: float) -> C | None:
     return pool[match[2]] if match else None
 
 
-def _judged_same(key_a: str, key_b: str, judge: SameNameJudge) -> bool:
-    cache_key = "same-name:" + ":".join(sorted((key_a, key_b)))
-    verdict = cache.get(cache_key)
-    if verdict is None:
-        try:
-            verdict = judge.same_name(key_a, key_b)
-        except AIError:
-            return True  # Without a verdict, let the person decide: they always confirm a merge.
-        cache.set(cache_key, verdict, JUDGEMENT_TTL)
-    return verdict
-
-
-def find_duplicate(text: str, candidates: Iterable[C], judge: SameNameJudge) -> C | None:
-    key = phonetic_key(text)
-    match = closest(key, candidates, MAYBE_SAME)
-    if match is None or match.key == key or _judged_same(key, match.key, judge):
-        return match
-    return None
+def find_duplicate(text: str, candidates: Iterable[C]) -> C | None:
+    return closest(phonetic_key(text), candidates, MAYBE_SAME)

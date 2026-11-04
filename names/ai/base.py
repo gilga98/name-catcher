@@ -37,10 +37,6 @@ class NameSuggester(Protocol):
     def describe(self, name: str, surname: str) -> NameIdea: ...
 
 
-class SameNameJudge(Protocol):
-    def same_name(self, name_a: str, name_b: str) -> bool: ...
-
-
 class Speaker(Protocol):
     def speak(self, text: str) -> bytes: ...
 

@@ -11,6 +11,7 @@ name_actions = {
     "official": views.official_spelling,
     "split": views.split_name,
     "audio": views.name_audio,
+    "details": views.name_details,
 }
 
 urlpatterns = [

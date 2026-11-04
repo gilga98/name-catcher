@@ -39,9 +39,6 @@ class StubAI:
     def describe(self, name: str, surname: str) -> NameIdea:
         return _idea((name, name, "A name your family suggested", "", name, "en-IN"), surname)
 
-    def same_name(self, name_a: str, name_b: str) -> bool:
-        return True
-
     def speak(self, text: str) -> bytes:
         buffer = io.BytesIO()
         with wave.open(buffer, "wb") as wav:

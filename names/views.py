@@ -25,11 +25,15 @@ def rate_limited(request: HttpRequest, exception: Exception) -> HttpResponse:
     return HttpResponse(message, status=429, content_type="text/plain")
 
 
+def _board_token(_group: str, request: HttpRequest) -> str:
+    return request.resolver_match.kwargs["token"]
+
+
 def _ai_budget(view):
     """Cap LLM spend per board and overall, so a leaked link can't run up the bill."""
     per_board = ratelimit(
         group="ai-board",
-        key=lambda _group, request: request.resolver_match.kwargs["token"],
+        key=_board_token,
         rate=settings.AI_RATE_PER_BOARD,
         block=True,
     )
@@ -215,7 +219,7 @@ def rank(request: HttpRequest, token: str) -> HttpResponse:
 
 @require_POST
 @with_board()
-@_ai_budget
+@ratelimit(group="add", key=_board_token, rate=settings.ADD_RATE_PER_BOARD, block=True)
 def add(request: HttpRequest, token: str) -> HttpResponse:
     form = AddNameForm(request.POST)
     if not form.is_valid():
@@ -269,10 +273,18 @@ def official_spelling(request: HttpRequest, token: str, pk: int) -> HttpResponse
 
 @require_POST
 @with_board(parent_only=True)
-@_ai_budget
 def split_name(request: HttpRequest, token: str, pk: int) -> HttpResponse:
     services.split_variant(_name(request, pk), request.POST.get("variant", ""), request.voter)
     return _shortlist(request)
+
+
+@require_POST
+@with_board()
+@_ai_budget
+def name_details(request: HttpRequest, token: str, pk: int) -> HttpResponse:
+    name = _name(request, pk)
+    services.describe_name(name)
+    return render(request, "names/partials/name_details.html", _context(request, name=name))
 
 
 @require_GET

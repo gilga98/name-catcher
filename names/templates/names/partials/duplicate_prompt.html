@@ -2,6 +2,6 @@
   <p>Is “{{ text }}” the same name as <strong>{{ match.text }}</strong>? It's already on the list.</p>
   <div class="actions">
     <button class="z-button z-button-primary" type="button" name="text" value="{{ text }}" hx-post="{% url 'merge' token match.pk %}" hx-target="#add-result">Yes, add my vote to {{ match.text }}</button>
-    <button class="z-button z-button-default" type="button" name="text" value="{{ text }}" hx-post="{% url 'add' token %}" hx-vals='{"force": "1"}' hx-target="#add-result" hx-indicator="#adding">No, it's a different name</button>
+    <button class="z-button z-button-default" type="button" name="text" value="{{ text }}" hx-post="{% url 'add' token %}" hx-vals='{"force": "1"}' hx-target="#add-result">No, it's a different name</button>
   </div>
 </div>

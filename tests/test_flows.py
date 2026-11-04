@@ -171,6 +171,31 @@ def test_guest_duplicate_asks_before_merging(guest, board):
     assert existing.votes.count() == 1
 
 
+def test_adding_a_name_never_waits_on_the_llm(parent, guest, board, monkeypatch):
+    def no_llm():
+        raise AssertionError("adding a name must not call the LLM")
+
+    monkeypatch.setattr("names.services.get_ai", no_llm)
+    assert post(parent, "add", text="Zoya").status_code == 200
+    assert post(guest, "add", text="Meera", by="Maa").status_code == 200
+    assert post(guest, "add", text="Mira").status_code == 200
+    assert board.names.count() == 2
+
+
+def test_details_load_after_adding_and_only_once(parent, board, monkeypatch):
+    post(parent, "add", text="Zoya")
+    name = board.names.get()
+    assert reverse("details", args=[parent[1], name.pk]) in page(parent).content.decode()
+
+    response = post(parent, "details", name.pk)
+    name.refresh_from_db()
+    assert name.meaning in response.content.decode()
+    assert reverse("details", args=[parent[1], name.pk]) not in page(parent).content.decode()
+
+    monkeypatch.setattr("names.services.get_ai", lambda: pytest.fail("details were already known"))
+    assert post(parent, "details", name.pk).status_code == 200
+
+
 def test_guest_can_insist_it_is_a_different_name(guest, board):
     Name.objects.create(board=board, text="Aarav", key="arav")
     post(guest, "add", text="Arav", force="1")

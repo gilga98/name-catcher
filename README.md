@@ -41,12 +41,12 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 
 ## Failure behaviour
 
-- **Gemini down:** a clear message and a retry button. Duplicate checks fall back to asking the person.
+- **Gemini down or over its free limit:** a clear message and a retry button. Adding names and spotting duplicates don't use Gemini, so they keep working.
 - **Redis down:** the site keeps working, and sessions fall back to the database. Actions under a rate limit pause until it returns.
 - **Database down:** `/readyz` returns 503, while `/healthz` stays up so the container isn't restarted in a loop.
 
 ## Layout
 
 - `names/ai/`: small interfaces (`base.py`) with Gemini and offline implementations. `AI_BACKEND` picks one.
-- `names/dedup.py`: phonetic keys, fuzzy matching, and LLM judgement for uncertain pairs.
+- `names/dedup.py`: phonetic keys and fuzzy matching. Close matches are always confirmed by the person.
 - `names/services.py`: what families can do. `names/views.py` only translates HTTP.
