@@ -1,5 +1,6 @@
 import secrets
 
+from django.conf import settings
 from django.db import models
 
 
@@ -8,10 +9,12 @@ def new_token() -> str:
 
 
 class Board(models.Model):
-    """One family's naming project. Each link is a capability: holding it grants access."""
+    """One family's naming project. Parents sign in; the family link alone lets relatives vote and suggest."""
 
+    members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="boards")
     parent_token = models.CharField(max_length=32, unique=True, default=new_token)
     guest_token = models.CharField(max_length=32, unique=True, default=new_token)
+    invite_token = models.CharField(max_length=32, unique=True, default=new_token)
     brief = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
 

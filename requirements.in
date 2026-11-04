@@ -10,3 +10,5 @@ google-genai
 rapidfuzz
 indic-transliteration
 Unidecode
+django-allauth
+django-redis

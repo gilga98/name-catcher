@@ -2,11 +2,12 @@
 
 from dataclasses import dataclass
 
+from django.contrib.auth.base_user import AbstractBaseUser
 from django.db import transaction
 
 from .ai.base import AIError, NameIdea, SuggestionRequest, get_ai
 from .dedup import ALMOST_CERTAINLY_SAME, closest, find_duplicate, phonetic_key
-from .models import Board, Name, Vote
+from .models import Board, Name, Vote, new_token
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,26 @@ class Voter:
 class AddResult:
     name: Name | None = None
     duplicate: Name | None = None
+
+
+@transaction.atomic
+def create_board(user: AbstractBaseUser, brief: dict) -> Board:
+    board = Board.objects.create(brief=brief)
+    board.members.add(user)
+    return board
+
+
+@transaction.atomic
+def join_board(board: Board, user: AbstractBaseUser) -> None:
+    """Invites are single use: each join issues a new link."""
+    board.members.add(user)
+    board.invite_token = new_token()
+    board.save(update_fields=["invite_token"])
+
+
+def reset_family_link(board: Board) -> None:
+    board.guest_token = new_token()
+    board.save(update_fields=["guest_token"])
 
 
 def _build_name(board: Board, idea: NameIdea, **fields) -> Name:

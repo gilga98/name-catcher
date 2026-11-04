@@ -15,7 +15,10 @@ name_actions = {
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("join/<str:token>/", views.join, name="join"),
     path("b/<str:token>/", views.board_page, name="board"),
+    path("b/<str:token>/family-link/reset", views.reset_family_link, name="reset_family_link"),
+    path("b/<str:token>/delete", views.delete_board, name="delete_board"),
     path("b/<str:token>/brief", views.update_brief, name="brief"),
     path("b/<str:token>/suggest", views.suggest, name="suggest"),
     path("b/<str:token>/rank", views.rank, name="rank"),

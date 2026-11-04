@@ -16,6 +16,7 @@
   --z-primary-f: #fff;
   --z-muted-f: var(--mauve);
   --z-focus: var(--plum);
+  --z-danger-f: #a4262c;
 
   --serif: "Newsreader Variable", Georgia, serif;
   --sans: "Manrope Variable", system-ui, sans-serif;
@@ -28,6 +29,7 @@
   --mauve: #bda3b5;
   --petal: #40293f;
   --z-primary-f: #2b1626;
+  --z-danger-f: #ff9d9d;
 }
 
 body { background: var(--oat); color: var(--ink); font-family: var(--sans); line-height: 1.55; }
@@ -83,6 +85,24 @@ h1, h2, h3, .name { font-family: var(--serif); font-weight: 400; color: var(--in
 .prompt, #add-result > p { margin-top: 1rem; }
 .share { display: flex; gap: .5rem; }
 .share .z-input { flex: 1; min-width: 0; }
+
+main > h1 { font-size: clamp(2.25rem, 8vw, 3.25rem); line-height: 1.05; letter-spacing: -.02em; margin: 2.5rem 0 .75rem; }
+main > h2 { font-size: 1.5rem; margin: 2rem 0 .75rem; }
+main > p { margin: 0 0 1.25rem; }
+main > p a, main form p a { color: var(--plum); text-decoration: underline; }
+/* allauth renders plain inputs, so match 0build's .z-input here. */
+main form p > input { display: block; width: 100%; padding: .5rem .75rem; border: 1px solid var(--petal); border-radius: .5rem; background: var(--paper); color: var(--ink); }
+main form p > input:focus-visible { outline: 2px solid var(--plum); outline-offset: 1px; }
+main form button.z-button { margin-top: .5rem; }
+.account { float: right; }
+.account a { color: var(--mauve); }
+.board-list { list-style: none; padding: 0; margin: 0 0 2.5rem; font-family: var(--serif); font-size: 1.5rem; }
+.board-list a { color: var(--plum); }
+main > .z-alert { margin-top: 1.5rem; }
+main form p:has(> input, > textarea) { margin-bottom: 1rem; }
+main form label { display: block; font-weight: 600; margin-bottom: .5rem; }
+main form p > span, main form .helptext { display: block; margin-top: .375rem; color: var(--mauve); font-size: .875rem; }
+main form .errorlist { color: var(--z-danger-f); padding-left: 1rem; }
 
 .thinking { color: var(--mauve); margin: .75rem 0; }
 .htmx-indicator { display: none; }

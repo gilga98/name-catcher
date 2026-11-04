@@ -26,9 +26,24 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 | `ALLOWED_HOSTS` | Yes | Your domain. |
 | `CSRF_TRUSTED_ORIGINS` | Yes | `https://` plus your domain. |
 | `DATABASE_URL` | Recommended | A Coolify Postgres URL. Otherwise SQLite at `/data`, which needs a persistent volume. |
+| `REDIS_URL` | Recommended | Shared cache, session cache and rate-limit counters. Without it, each worker keeps its own, so limits are looser. |
+| `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` or `EMAIL_USE_SSL`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | Yes | SMTP for sign-up and password-reset codes. Nobody can finish signing up without it. |
+| `TRUSTED_CLIENT_IP_HEADER` | Behind Cloudflare | `CF-Connecting-IP`, so login limits apply per visitor. |
 | `WEB_CONCURRENCY` | No | Gunicorn workers. Defaults to 2. |
 | `AI_RATE_PER_BOARD`, `AI_RATE_GLOBAL`, `BOARD_CREATE_RATE` | No | Limits on LLM spend and new boards. |
 | `GEMINI_MODEL`, `GEMINI_TTS_MODEL`, `GEMINI_TTS_VOICE` | No | Change models without touching code. |
+
+## Access
+
+- Parents sign up with email and password and verify a code by email (django-allauth). Their boards are private to members.
+- A partner joins through a single-use invite link, using their own account.
+- Relatives use the family link with no account: they can only vote and suggest. Parents can replace the link at any time.
+
+## Failure behaviour
+
+- **Gemini down:** a clear message and a retry button. Duplicate checks fall back to asking the person.
+- **Redis down:** the site keeps working, and sessions fall back to the database. Actions under a rate limit pause until it returns.
+- **Database down:** `/readyz` returns 503, while `/healthz` stays up so the container isn't restarted in a loop.
 
 ## Layout
 

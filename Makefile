@@ -4,4 +4,4 @@ check:
 	.venv/bin/xenon --max-absolute B --max-modules A --max-average A --exclude '.venv/*,*/migrations/*' .
 	.venv/bin/pytest -q
 run:
-	.venv/bin/python manage.py migrate && .venv/bin/python manage.py createcachetable && .venv/bin/python manage.py runserver
+	.venv/bin/python manage.py migrate && .venv/bin/python manage.py runserver

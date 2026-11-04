@@ -17,7 +17,7 @@
   <h2>To review</h2>
   <div id="review">{% include "names/partials/review_cards.html" %}</div>
   <p id="thinking" class="thinking htmx-indicator" role="status"><span data-z-spinner="ratio: 0.6"></span> Finding names for you…</p>
-  <button class="z-button z-button-default" type="button" hx-post="{% url 'suggest' token %}" hx-target="#review" hx-swap="beforeend" hx-indicator="#thinking"{% if is_new %} hx-trigger="load, click"{% endif %}>Suggest more names</button>
+  <button class="z-button z-button-default" type="button" hx-disabled-elt="this" hx-post="{% url 'suggest' token %}" hx-target="#review" hx-swap="beforeend" hx-indicator="#thinking"{% if is_new %} hx-trigger="load, click"{% endif %}>Suggest more names</button>
 </section>
 {% else %}
 <header class="hero hero-small">
@@ -46,11 +46,23 @@
 {% if is_parent %}
 <section class="section">
   <h2>Ask your family</h2>
-  <p class="hint">Anyone with this link can vote and suggest names. Parents see suggestions first. To vote together, send your partner this page's address.</p>
+  <p class="hint">Anyone with this link can vote and suggest names, without an account. You see their suggestions first.</p>
   <div class="share">
     <input class="z-input" id="guest-link" readonly value="{{ guest_url }}" aria-label="Family link">
     <button class="z-button z-button-default" type="button" data-copy="#guest-link">Copy link</button>
   </div>
+  <button class="z-button z-button-text" type="button" hx-post="{% url 'reset_family_link' token %}" hx-confirm="The current family link will stop working. Make a new one?">Make a new family link</button>
+</section>
+<section class="section">
+  <h2>Invite your partner</h2>
+  <p class="hint">They sign in with their own account and get the same access as you. This link works once.</p>
+  <div class="share">
+    <input class="z-input" id="invite-link" readonly value="{{ invite_url }}" aria-label="Partner invite link">
+    <button class="z-button z-button-default" type="button" data-copy="#invite-link">Copy link</button>
+  </div>
+</section>
+<section class="section">
+  <button class="z-button z-button-danger" type="button" hx-post="{% url 'delete_board' token %}" hx-confirm="Delete this board and all its names and votes? This can't be undone.">Delete this board</button>
 </section>
 {% endif %}
 {% endblock %}

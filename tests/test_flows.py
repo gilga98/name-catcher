@@ -1,4 +1,8 @@
+import re
+
 import pytest
+from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.cache import cache
 from django.test import Client, override_settings
 from django.urls import reverse
@@ -19,9 +23,17 @@ def board():
     return Board.objects.create(brief={"surname": "Sharma"})
 
 
+def member(board, email="parent@example.com"):
+    user = get_user_model().objects.create_user(username=email, email=email, password="not-a-real-pw-1")
+    board.members.add(user)
+    client = Client()
+    client.force_login(user)
+    return client, board.parent_token
+
+
 @pytest.fixture
 def parent(board):
-    return Client(), board.parent_token
+    return member(board)
 
 
 @pytest.fixture
@@ -39,12 +51,87 @@ def page(actor):
     return client.get(reverse("board", args=[token]))
 
 
-def test_brief_creates_a_board_and_redirects_to_it():
-    response = Client().post(reverse("home"), {"surname": "Rao", "themes": ["Light"], "origins": ["Tamil"]})
+def test_new_parent_signs_up_verifies_by_code_and_keeps_their_brief():
+    client = Client()
+    response = client.post(reverse("home"), {"surname": "Rao", "themes": ["Light"]})
+    assert response.url == reverse("account_signup")
+    assert not Board.objects.exists()
+
+    client.post(
+        reverse("account_signup"),
+        {"email": "new@example.com", "password1": "a-long-passphrase-9", "password2": "a-long-passphrase-9"},
+    )
+    code = re.search(r"^\s*([A-Z0-9-]{6,})\s*$", mail.outbox[0].body, re.M).group(1)
+    response = client.post(reverse("account_email_verification_sent"), {"code": code}, follow=True)
+
     board = Board.objects.get()
-    assert response.status_code == 302
-    assert board.parent_token in response.url
+    assert response.redirect_chain[-1][0] == reverse("board", args=[board.parent_token])
     assert board.brief["themes"] == ["Light"]
+    assert board.members.get().email == "new@example.com"
+
+
+def test_signed_in_parent_starts_a_board_straight_away(board, parent):
+    client, _ = parent
+    response = client.post(reverse("home"), {"surname": "Rao"})
+    assert Board.objects.count() == 2
+    assert Board.objects.exclude(pk=board.pk).get().parent_token in response.url
+
+
+def test_home_lists_only_my_boards(board, parent):
+    other = Board.objects.create(brief={"surname": "Stranger"})
+    html = parent[0].get(reverse("home")).content.decode()
+    assert board.parent_token in html
+    assert other.parent_token not in html
+
+
+def test_parent_page_requires_sign_in(board):
+    response = Client().get(reverse("board", args=[board.parent_token]))
+    assert response.status_code == 302
+    assert reverse("account_login") in response.url
+
+
+def test_expired_session_on_an_htmx_action_goes_to_login(board):
+    response = Client().post(reverse("suggest", args=[board.parent_token]), **HTMX)
+    assert reverse("account_login") in response["HX-Redirect"]
+    assert not board.names.exists()
+
+
+def test_signed_in_stranger_cannot_see_a_board(board):
+    stranger = Board.objects.create()
+    client, _ = member(stranger, "stranger@example.com")
+    assert client.get(reverse("board", args=[board.parent_token])).status_code == 404
+
+
+def test_partner_joins_with_an_invite_that_works_once(board, parent):
+    stranger = Board.objects.create()
+    client, _ = member(stranger, "partner@example.com")
+    url = reverse("join", args=[board.invite_token])
+    assert client.get(url).status_code == 200
+    assert not board.members.filter(email="partner@example.com").exists()
+    client.post(url)
+    assert board.members.filter(email="partner@example.com").exists()
+    assert client.post(url).status_code == 404
+
+
+def test_invite_requires_sign_in(board):
+    response = Client().post(reverse("join", args=[board.invite_token]))
+    assert reverse("account_login") in response.url
+    assert board.members.count() == 0
+
+
+def test_family_link_can_be_replaced(parent, guest, board):
+    old_guest = guest
+    post(parent, "reset_family_link")
+    assert page(old_guest).status_code == 404
+    board.refresh_from_db()
+    assert page((Client(), board.guest_token)).status_code == 200
+
+
+def test_deleting_a_board_removes_everything(parent, board):
+    Name.objects.create(board=board, text="Tara", key="tara")
+    post(parent, "delete_board")
+    assert not Board.objects.exists()
+    assert not Name.objects.exists()
 
 
 def test_suggestions_show_meaning_pronunciation_and_surname(parent, board):
@@ -100,7 +187,7 @@ def test_guest_suggestion_waits_for_parents(guest, parent, board):
 
 
 def test_two_parents_voting_are_recognised(board):
-    first, second = (Client(), board.parent_token), (Client(), board.parent_token)
+    first, second = member(board, "a@example.com"), member(board, "b@example.com")
     name = Name.objects.create(board=board, text="Tara", key="tara", status=Name.Status.KEPT)
     post(first, "vote", name.pk)
     post(second, "vote", name.pk)
@@ -146,14 +233,26 @@ def test_audio_is_generated_once_then_served_from_the_database(guest, board):
 
 
 @pytest.mark.parametrize(
-    ("route", "args"), [("suggest", ()), ("rank", ()), ("brief", ()), ("keep", (1,)), ("pass", (1,)), ("split", (1,))]
+    ("route", "args"),
+    [
+        ("suggest", ()),
+        ("rank", ()),
+        ("brief", ()),
+        ("keep", (1,)),
+        ("pass", (1,)),
+        ("split", (1,)),
+        ("delete_board", ()),
+        ("reset_family_link", ()),
+    ],
 )
 def test_guest_link_cannot_use_parent_actions(guest, route, args):
     assert post(guest, route, *args).status_code == 404
 
 
-def test_family_link_never_reveals_the_parent_link(guest, board):
-    assert board.parent_token not in page(guest).content.decode()
+def test_family_link_never_reveals_private_links(guest, board):
+    html = page(guest).content.decode()
+    assert board.parent_token not in html
+    assert board.invite_token not in html
 
 
 def test_names_on_another_board_are_out_of_reach(parent):
@@ -199,5 +298,6 @@ def test_security_headers_are_set(parent):
     assert response["Referrer-Policy"] == "same-origin"
 
 
-def test_healthcheck():
+def test_healthchecks():
     assert Client().get("/healthz").content == b"ok"
+    assert Client().get("/readyz").content == b"ok"

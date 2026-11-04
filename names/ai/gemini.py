@@ -60,7 +60,10 @@ class GeminiAI:
             raise AIError("Name suggestions need a GEMINI_API_KEY on the server.")
         self._client = genai.Client(
             api_key=settings.GEMINI_API_KEY,
-            http_options=types.HttpOptions(timeout=settings.GEMINI_TIMEOUT_MS),
+            http_options=types.HttpOptions(
+                timeout=settings.GEMINI_TIMEOUT_MS,
+                retry_options=types.HttpRetryOptions(attempts=settings.GEMINI_ATTEMPTS),
+            ),
         )
 
     def _generate(self, model: str, contents: str, config: types.GenerateContentConfig):

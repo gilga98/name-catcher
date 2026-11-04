@@ -4,10 +4,17 @@
   <h1>Find a name you'll both love.</h1>
   <p>Pick what matters to you. You'll get names with their meanings and how to say them, then your family can vote on your favourites.</p>
 </header>
+{% if boards %}
+<section class="section">
+  <h2>Your boards</h2>
+  <ul class="board-list">{% for board in boards %}<li><a href="{% url 'board' board.parent_token %}">{% if board.brief.surname %}Baby {{ board.brief.surname }}{% else %}Baby names{% endif %}</a></li>{% endfor %}</ul>
+  <h2>Start another</h2>
+</section>
+{% endif %}
 <form method="post">
   {% csrf_token %}
   {% include "names/partials/brief_fields.html" with form=form %}
   <button class="z-button z-button-primary z-button-large submit" type="submit">Show me names</button>
-  <p class="hint">Everything is optional. No account needed.</p>
+  <p class="hint">Everything is optional. {% if not user.is_authenticated %}Next you'll create a free account, so your names stay yours.{% endif %}</p>
 </form>
 {% endblock %}
