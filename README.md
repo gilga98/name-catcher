@@ -51,6 +51,8 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 
 Emails, every LLM call and Soota requests run off the request path, queued to Redis and drained by Huey in separate worker containers. LLM calls have their own queue and worker, so they can't hold up a sign-in code. Emails and Soota share the other, where emails go first and always have a thread free. Retries use Huey's task scheduler. In Coolify, run two more applications from this repo, one with `CONTAINER_ROLE=worker` and one with `CONTAINER_ROLE=llm-worker`, each with the same environment as the web app and health checks disabled. Deploy all three on every push. Schedule `python manage.py run_jobs` every few minutes, on one application only, to tidy finished jobs and pick up anything stranded by a restart. Schedule `python manage.py purge_inactive` daily: the Privacy Policy promises it. Bump `POLICY_VERSION` in settings when the policies change, and everyone is asked to accept again.
 
+A push deploys all three applications at once. Only the web app runs migrations, and workers wait at startup until those are done. The old web app is still serving while it happens, so a migration has to work with the code before it. Give a new column a `db_default`, so old code can still insert rows. To remove or rename a column, first ship code that no longer uses it, then change the column in a later deploy.
+
 Before launch, `python manage.py check --deploy` should list no `names.W` warnings. Also, outside this code: make the server reachable only through Cloudflare (a Tunnel, or a firewall allowing only Cloudflare's addresses), point a Zero Trust application at your `ADMIN_PATH`, and set a billing cap in Google Cloud.
 
 ## Admin
