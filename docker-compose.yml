@@ -31,6 +31,22 @@ services:
       - redis
       - web
 
+  llm-worker:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - CONTAINER_ROLE=llm-worker
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////data/db.sqlite3}
+    volumes:
+      - data:/data
+    depends_on:
+      - redis
+      - web
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped

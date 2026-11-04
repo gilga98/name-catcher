@@ -180,6 +180,8 @@ document.querySelectorAll("[data-baby-photo]").forEach((image) => {
 
 document.addEventListener("click", (event) => {
   if (event.target.closest("[data-dismiss-cookies]")) dismissCookieNotice();
+  const sound = event.target.closest("[data-sound]");
+  if (sound) document.querySelector("[data-starts-with]").value = sound.dataset.sound;
   const button = event.target.closest("[data-say], [data-audio], [data-copy], [data-share]");
   if (!button) return;
   if (button.dataset.say) say(button);

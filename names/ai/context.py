@@ -27,7 +27,7 @@ def scrub(text: str) -> str:
 
 def brief_for_llm(brief: dict, birth_star: dict | None = None) -> dict:
     shared = {key: brief[key] for key in _SHARED if brief.get(key)}
-    if birth_star:
+    if birth_star and not brief.get("starts_with"):  # A sound the parents picked is a hard limit, and it wins.
         shared["birth_sounds"] = birth_star["letters"]
     if brief.get("notes"):
         shared["notes"] = scrub(brief["notes"])

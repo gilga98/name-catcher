@@ -7,32 +7,33 @@
       <p class="hint">Pada {{ board.birth_star.pada }}, Moon in {{ board.birth_star.sign }}</p>
     </div>
   </div>
-  <ul class="sounds" aria-label="The star's sounds">{% for sound in board.birth_star.letters %}<li{% if forloop.counter == board.birth_star.pada %} class="is-own" aria-current="true"{% endif %}>{{ sound }}</li>{% endfor %}</ul>
+  <ul class="sounds" aria-label="The star's sounds. Choose one to use it.">{% for sound in board.birth_star.letters %}<li{% if forloop.counter == board.birth_star.pada %} class="is-own" aria-current="true"{% endif %}><button type="button" data-sound="{{ sound }}">{{ sound }}</button></li>{% endfor %}</ul>
   {% if board.birth_star.birth_number %}
   <dl class="star-numbers">
     <div><dt>Birth number</dt><dd>{{ board.birth_star.birth_number }}</dd></div>
     <div><dt>Destiny number</dt><dd>{{ board.birth_star.destiny_number }}</dd></div>
   </dl>
   {% endif %}
-  <p class="hint">Names with these sounds come first. Traditions differ, so check with someone you trust. Family never sees this.</p>
-  <button class="text-button" type="button" hx-post="{% url 'remove_birth_star' token %}" hx-confirm="Remove the birth star?">Remove birth star</button>
+  <p class="hint star-first">Names with these sounds come first. Tap one to see only that sound, then save.</p>
+  <p class="hint">Traditions differ, so check with someone you trust. Family never sees this.</p>
+  <button class="text-button" type="button" hx-params="none" hx-post="{% url 'remove_birth_star' token %}" hx-confirm="Remove the birth star?">Remove birth star</button>
   {% elif birth_star_pending %}
   <p role="status" class="thinking">{% icon "star" %} Working out the birth star…</p>
   {% else %}
   <details class="disclosure"{% if birth_star_form.errors or birth_star_error %} open{% endif %}>
-    <summary><span class="star-mark">{% icon "star" %}</span>Add the birth star, if your family follows one</summary>
-    <form class="form-stack" hx-post="{% url 'read_birth_star' token %}" hx-target="#birth-star" hx-swap="outerHTML" hx-disabled-elt="find button" autocomplete="off">
+    <summary><span class="star-mark">{% icon "star" %}</span>Or find the sounds from the birth star</summary>
+    <div class="form-stack">
       {% if birth_star_error %}<p class="hint" role="alert">{{ birth_star_error }}</p>{% endif %}
       {{ birth_star_form.non_field_errors }}
       <div class="field-row">
         <div class="field">
           <label class="z-form-label" for="birth-date">Date of birth</label>
-          <input class="z-input" type="date" id="birth-date" name="birth_date" value="{{ birth_star_form.birth_date.value|default:'' }}" required>
+          <input class="z-input" type="date" id="birth-date" name="birth_date" form="birth-star-form" value="{{ birth_star_form.birth_date.value|default:'' }}" required>
           {{ birth_star_form.birth_date.errors }}
         </div>
         <div class="field">
           <label class="z-form-label" for="birth-time">Time of birth</label>
-          <input class="z-input" type="time" id="birth-time" name="birth_time" value="{{ birth_star_form.birth_time.value|default:'' }}" required>
+          <input class="z-input" type="time" id="birth-time" name="birth_time" form="birth-star-form" value="{{ birth_star_form.birth_time.value|default:'' }}" required>
           {{ birth_star_form.birth_time.errors }}
         </div>
       </div>
@@ -40,17 +41,17 @@
       <div class="field place-search" data-place-search data-url="{% url 'place_search' token %}">
         <label class="z-form-label" for="birth-place">Place of birth</label>
         <input class="z-input" type="text" id="birth-place" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="birth-place-options" aria-describedby="birth-place-status" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Search town or city" value="{{ place.label|default:'' }}" required>
-        <input type="hidden" name="place" value="{% if place %}{{ birth_star_form.place.value }}{% endif %}">
+        <input type="hidden" name="place" form="birth-star-form" value="{% if place %}{{ birth_star_form.place.value }}{% endif %}">
         <ul class="place-options" id="birth-place-options" role="listbox" aria-label="Places" hidden></ul>
         <p class="hint place-status{% if place %} is-chosen{% endif %}" id="birth-place-status" role="status" data-place-status>{% if place %}Time zone {{ place.timezone }}{% endif %}</p>
         {{ birth_star_form.place.errors }}
       </div>
       {% endwith %}
-      <label class="check-row"><input type="checkbox" name="consent" required> <span>Send these details to Soota, our calculation service, to work out the birth star and birth numbers. We delete them once it answers, and keep only the star, its sounds and the numbers. Your partner on this board sees those too, and AI may be told the sounds.</span></label>
+      <label class="check-row"><input type="checkbox" name="consent" form="birth-star-form" required> <span>Send these details to Soota, our calculation service, to work out the birth star and birth numbers. We delete them once it answers, and keep only the star, its sounds and the numbers. Your partner on this board sees those too, and AI may be told the sounds.</span></label>
       {{ birth_star_form.consent.errors }}
-      <button class="z-button z-button-default" type="submit">Find the birth star</button>
+      <button class="z-button z-button-default" id="find-birth-star" type="submit" form="birth-star-form">Find the birth star</button>
       <p class="hint place-credit">Places: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>, <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a></p>
-    </form>
+    </div>
   </details>
   {% endif %}
 </div>

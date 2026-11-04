@@ -10,10 +10,10 @@
         <summary>
           <h3 class="name name-small">{{ name.text }}{% if surname %} <span class="surname">{{ surname }}</span>{% endif %}</h3>
           {% if name.meaning %}<span class="kept-line">{{ name.meaning }}</span>{% endif %}
+          {% if birth_sounds and name.key|starts_with_sound:birth_sounds %}<p class="flag" title="Starts with a birth star sound.">{% icon "star" %}Birth star sound</p>{% endif %}
+          {% if numerology_on %}{% include "names/partials/name_number.html" %}{% endif %}
         </summary>
         {% include "names/partials/name_details.html" %}
-        {% if birth_sounds and name.key|starts_with_sound:birth_sounds %}<p class="flag" title="Starts with a birth star sound.">{% icon "star" %}Birth star sound</p>{% endif %}
-        {% if numerology_on %}{% include "names/partials/name_number.html" %}{% endif %}
         {% if name.variants %}
         <div class="variants">Also written:
           {% for variant in name.variants %}

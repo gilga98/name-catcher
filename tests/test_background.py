@@ -2,6 +2,7 @@ import threading
 from types import SimpleNamespace
 
 import pytest
+from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.cache import cache
@@ -19,6 +20,7 @@ from names.models import AICall, Board, CatalogName, Job, Name, NameAlias, Vote
 
 pytestmark = pytest.mark.django_db
 HTMX = {"HTTP_HX_REQUEST": "true"}
+LLM_HUEY = django_settings.LLM_HUEY
 PARK = {"JOBS_EAGER": False}  # Work waits in the queue, as it does between a request and the worker.
 
 
@@ -26,6 +28,7 @@ PARK = {"JOBS_EAGER": False}  # Work waits in the queue, as it does between a re
 def clear_cache():
     cache.clear()
     HUEY.flush()
+    LLM_HUEY.flush()
 
 
 def idea(given, name=None, meaning="A meaning"):
@@ -444,25 +447,24 @@ def test_admin_job_list_never_shows_message_contents(settings):
     assert b"SECRET123" not in detail.content
 
 
-def test_huey_drain_queue_task_executes_pending_work(board):
+def test_the_llm_worker_runs_llm_jobs_from_its_own_queue(board):
     with override_settings(**PARK), TestCase.captureOnCommitCallbacks(execute=True):
         job = jobs.enqueue(jobs.LLM, "family_ideas", {"board": board.pk})
         assert job.status == Job.Status.QUEUED
-    task = HUEY.dequeue()
+    assert HUEY.pending_count() == 0
+    task = LLM_HUEY.dequeue()
     assert task is not None
-    HUEY.execute(task)
+    LLM_HUEY.execute(task)
     job.refresh_from_db()
     assert job.status == Job.Status.DONE
 
 
-def test_huey_prioritizes_mail_over_llm(board):
+def test_huey_prioritizes_mail_over_soota():
     with override_settings(**PARK), TestCase.captureOnCommitCallbacks(execute=True):
-        jobs.enqueue(jobs.LLM, "family_ideas", {"board": board.pk})
+        jobs.enqueue(jobs.SOOTA, "read_name_numbers", {})
         jobs.enqueue(jobs.MAIL, "send_email", {"to": "a@example.com"})
-    task1 = HUEY.dequeue()
-    task2 = HUEY.dequeue()
-    assert task1.args == (jobs.MAIL,)
-    assert task2.args == (jobs.LLM,)
+    assert HUEY.dequeue().args == (jobs.MAIL,)
+    assert HUEY.dequeue().args == (jobs.SOOTA,)
 
 
 def test_huey_schedules_retry_on_failure(board, monkeypatch):
@@ -486,7 +488,7 @@ def _redis_down(*args, **kwargs):
 
 
 def test_a_redis_outage_never_fails_the_page_and_the_job_waits(board, client, monkeypatch):
-    monkeypatch.setattr(HUEY, "enqueue", _redis_down)
+    monkeypatch.setattr(LLM_HUEY, "enqueue", _redis_down)
     with override_settings(**PARK), TestCase.captureOnCommitCallbacks(execute=True):
         response = client.post(reverse("suggest", args=[board.parent_token]), **HTMX)
     assert response.status_code == 200
@@ -509,20 +511,19 @@ def test_polling_a_waiting_job_doesnt_flood_the_queue(board, client):
         job = Job.objects.get(kind="suggest")
         for _ in range(10):
             client.get(reverse("ai_job", args=[board.parent_token, job.pk]), **HTMX)
-    assert HUEY.pending_count() == 2  # The job itself, and one nudge in case its worker has gone.
+    assert LLM_HUEY.pending_count() == 2  # The job itself, and one nudge in case its worker has gone.
 
 
-def test_slow_work_cant_take_the_thread_kept_for_mail(board, monkeypatch):
+def test_soota_cant_take_the_thread_kept_for_mail(monkeypatch):
     monkeypatch.setattr(jobs, "_slow_slots", threading.BoundedSemaphore(1))
     drained = []
     monkeypatch.setattr(jobs, "drain", drained.append)
     jobs._slow_slots.acquire()
-    jobs.drain_queue.call_local(jobs.LLM)
     jobs.drain_queue.call_local(jobs.SOOTA)
     jobs.drain_queue.call_local(jobs.MAIL)
     assert drained == [jobs.MAIL]
     jobs._slow_slots.release()
-    jobs.drain_queue.call_local(jobs.LLM)
-    assert drained == [jobs.MAIL, jobs.LLM]
+    jobs.drain_queue.call_local(jobs.SOOTA)
+    assert drained == [jobs.MAIL, jobs.SOOTA]
     assert jobs._slow_slots.acquire(blocking=False)
 

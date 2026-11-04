@@ -1,7 +1,8 @@
 """Runs slow third-party work off the request path. A person never waits on an email server, an LLM or Soota.
 
-Jobs live in the database, so they survive restarts. A separate Huey worker container drains them from Redis queues.
-Mail goes first in the queue and always has a thread of its own, so a slow LLM call can't delay a sign-in code.
+Jobs live in the database, so they survive restarts. Separate Huey worker containers drain them from Redis queues.
+LLM calls have a queue and a worker of their own, so however slow they get, they can't delay a sign-in code. Mail and
+Soota share the other, where mail goes first and always has a thread free.
 `manage.py run_jobs` picks up anything stranded if a process dies with no traffic to follow.
 """
 
@@ -15,7 +16,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
-from huey.contrib.djhuey import db_task
+from huey.contrib.djhuey import close_db, db_task
 from redis.exceptions import RedisError
 
 from .ai.base import AIError
@@ -32,9 +33,9 @@ RECENT_FAILURE = timedelta(minutes=1)
 SOOTA_GIVES_UP_AFTER = timedelta(hours=1)
 RETRIES = {"send_email": 5, "read_birth_star": 2}
 RETRY_SECONDS = 30
-PRIORITIES = {MAIL: 100, SOOTA: 50, LLM: 10}
+PRIORITIES = {MAIL: 100, SOOTA: 50}
 NUDGE_SECONDS = 30
-# Priority only orders what's waiting. Without this, a few LLM calls could hold every thread and delay a sign-in code.
+# Priority only orders what's waiting. Without this, slow Soota readings could hold every thread and delay mail.
 _slow_slots = threading.BoundedSemaphore(max(settings.HUEY_WORKERS - 1, 1))
 
 
@@ -49,6 +50,12 @@ def drain_queue(queue: str) -> None:
         drain(queue)
     finally:
         _slow_slots.release()
+
+
+@settings.LLM_HUEY.task()
+@close_db
+def drain_llm() -> None:
+    drain(LLM)
 
 
 def enqueue(queue: str, kind: str, payload: dict, *, board: Board | None = None, dedupe: str = "") -> Job:
@@ -81,7 +88,10 @@ def nudge(queue: str) -> None:
 def _wake(queue: str, delay: int | None = None) -> None:
     """The job is safe in the database, and `run_jobs` finds it once Redis is back, so an outage never fails a page."""
     try:
-        drain_queue(queue, delay=delay, priority=PRIORITIES[queue])
+        if queue == LLM:
+            drain_llm(delay=delay)
+        else:
+            drain_queue(queue, delay=delay, priority=PRIORITIES[queue])
     except RedisError as exc:
         logger.warning("Couldn't wake the %s queue: %s", queue, type(exc).__name__)
 

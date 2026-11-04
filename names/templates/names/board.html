@@ -90,7 +90,6 @@
             <p class="hint">{% icon "lock" %}It stays on this device and is never uploaded.</p>
           </div>
         </div>
-        {% if birth_star_enabled %}<div class="tile star-tile">{% include "names/partials/birth_star.html" %}</div>{% endif %}
         <div class="tile bin-tile">
           <h2>{% icon "trash" %} Bin</h2>
           {% if binned %}
@@ -113,6 +112,8 @@
         <div class="brief-steps">{% include "names/partials/brief_fields.html" with form=brief_form %}</div>
         <button class="z-button z-button-primary submit" type="submit">Save changes</button>
       </form>
+      {# The birth star's fields sit inside the form above, and belong to this one through their form attribute. #}
+      {% if birth_star_enabled %}<form id="birth-star-form" hx-post="{% url 'read_birth_star' token %}" hx-target="#birth-star" hx-swap="outerHTML" hx-disabled-elt="#find-birth-star" autocomplete="off"></form>{% endif %}
     </section>
   </div>
 </div>

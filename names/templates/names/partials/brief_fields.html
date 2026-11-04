@@ -33,18 +33,23 @@
     <label class="check-row">{{ form.share_notes }} <span>Show to family on the family link</span></label>
     <p class="hint">{% icon "info" %}AI reads this, so leave out phone numbers, addresses and health details.</p>
   </div>
-  <div class="field-row">
-    <div class="field">
-      <label class="z-form-label" for="{{ form.starts_with.id_for_label }}">Starts with</label>
-      <input class="z-input" type="text" id="{{ form.starts_with.id_for_label }}" name="starts_with" maxlength="10" value="{{ form.starts_with.value|default:'' }}" placeholder="Che">
-    </div>
-    <div class="field">
-      <label class="z-form-label" for="{{ form.avoid.id_for_label }}">Names to avoid</label>
-      <input class="z-input" type="text" id="{{ form.avoid.id_for_label }}" name="avoid" maxlength="200" value="{{ form.avoid.value|default:'' }}" placeholder="Cousins, exes">
-      <p class="hint">{% icon "lock" %}Hidden from family and AI</p>
-    </div>
+  <div class="field">
+    <label class="z-form-label" for="{{ form.avoid.id_for_label }}">Names to avoid</label>
+    <input class="z-input" type="text" id="{{ form.avoid.id_for_label }}" name="avoid" maxlength="200" value="{{ form.avoid.value|default:'' }}" placeholder="Cousins, exes">
+    <p class="hint">{% icon "lock" %}Hidden from family and AI</p>
   </div>
+</div>
+<div class="step sound-step" data-step>
+  <p class="step-q" tabindex="-1">Should it start with a certain sound?</p>
+  <div class="field">
+    <label class="z-form-label" for="{{ form.starts_with.id_for_label }}">Starts with</label>
+    <input class="z-input" type="text" id="{{ form.starts_with.id_for_label }}" name="starts_with" maxlength="10" value="{{ form.starts_with.value|default:'' }}" placeholder="Che" data-starts-with>
+    <p class="hint sound-wins">Only names with this sound will show. Clear it to see them all.</p>
+  </div>
+  {% if birth_star_enabled %}{% include "names/partials/birth_star.html" %}{% elif form.numerology_available %}
+  <p class="hint">{% icon "star" %}Following a birth star? You can find its sounds in Preferences once your board is ready.</p>
+  {% endif %}
   {% if form.numerology_available %}
-  <label class="check-row">{{ form.numerology }} <span>Show each name's number. Only the spelling goes to our calculation service.</span></label>
+  <label class="check-row">{{ form.numerology }} <span>Show each name's numerology number. Only the spelling goes to our calculation service.</span></label>
   {% endif %}
 </div>

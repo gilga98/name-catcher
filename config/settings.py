@@ -4,6 +4,7 @@ from pathlib import Path
 
 import environ
 from csp.constants import NONE, SELF, UNSAFE_INLINE
+from huey import MemoryHuey, RedisHuey
 from redis import ConnectionPool
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -74,7 +75,8 @@ DATABASES["default"] |= {"CONN_MAX_AGE": 60, "CONN_HEALTH_CHECKS": True}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REDIS_URL = env("REDIS_URL", default="")
-HUEY_WORKERS = env.int("HUEY_WORKERS", default=4)
+HUEY_WORKERS = env.int("HUEY_WORKERS", default=2)
+LLM_WORKERS = env.int("LLM_WORKERS", default=3)
 if REDIS_URL:
     # A Redis outage must not take the site down: reads miss, sessions fall back to the database,
     # and rate-limited actions pause because their counters can't be trusted.
@@ -90,11 +92,13 @@ if REDIS_URL:
         }
     }
     DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
+    # Longer than the consumer's 1 second blocking read, short enough that an outage can't stall a page for long.
+    _huey_redis = ConnectionPool.from_url(REDIS_URL, socket_connect_timeout=2, socket_timeout=5)
+    LLM_HUEY = RedisHuey("name_catcher_llm", connection_pool=_huey_redis, results=False)
     HUEY = {
         "huey_class": "huey.PriorityRedisHuey",
         "name": "name_catcher",
-        # Longer than the consumer's 1 second blocking read, short enough that an outage can't stall a page for long.
-        "connection_pool": ConnectionPool.from_url(REDIS_URL, socket_connect_timeout=2, socket_timeout=5),
+        "connection_pool": _huey_redis,
         "immediate": False,
         "results": False,  # Tasks return nothing: the outcome of the work is on the Job row.
         "consumer": {
@@ -105,6 +109,7 @@ if REDIS_URL:
 else:
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
     SILENCED_SYSTEM_CHECKS = ["django_ratelimit.E003", "django_ratelimit.W001"]
+    LLM_HUEY = MemoryHuey("name_catcher_llm", immediate=True)
     HUEY = {
         "huey_class": "huey.MemoryHuey",
         "name": "name_catcher",
@@ -171,6 +176,7 @@ EMAIL_TIMEOUT = 10
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Naamadeva <no-reply@localhost>")
 
 LANGUAGE_CODE = "en"
+TIME_ZONE = env("TIME_ZONE", default="Asia/Kolkata")
 USE_TZ = True
 
 STATIC_URL = "static/"
@@ -184,8 +190,14 @@ if not DEBUG:
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "formatters": {"huey": {"format": "[%(asctime)s] %(levelname)s %(name)s %(threadName)s: %(message)s"}},
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+        "huey": {"class": "logging.StreamHandler", "formatter": "huey"},
+    },
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", default="INFO")},
+    # With a handler here, the consumer doesn't add its own and print every line twice.
+    "loggers": {"huey": {"handlers": ["huey"], "level": "INFO", "propagate": False}},
 }
 
 # TLS terminates at Coolify's proxy, which also handles the HTTP -> HTTPS redirect.
@@ -221,11 +233,11 @@ if TURNSTILE_SITE_KEY:
 
 AI_BACKEND = env("AI_BACKEND", default="names.ai.gemini.GeminiAI")
 GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
-GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-3.5-flash-lite")
+GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-3.1-flash-lite")
 GEMINI_TTS_MODEL = env("GEMINI_TTS_MODEL", default="gemini-3.8-flash-lite-tts")
 GEMINI_TTS_VOICE = env("GEMINI_TTS_VOICE", default="Kore")
 # Runs on the worker, where nobody is held up. Every attempt together must stay under jobs.LEASE.
-GEMINI_TIMEOUT_MS = env.int("GEMINI_TIMEOUT_MS", default=60000)
+GEMINI_TIMEOUT_MS = env.int("GEMINI_TIMEOUT_MS", default=30000)
 GEMINI_ATTEMPTS = env.int("GEMINI_ATTEMPTS", default=2)
 
 # Soota works out birth stars. Until SOOTA_API_URL is set, nobody is asked for birth details.

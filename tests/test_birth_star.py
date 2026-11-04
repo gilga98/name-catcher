@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import timedelta
 
 import httpx
@@ -147,7 +148,8 @@ def test_the_panel_stays_away_until_soota_is_configured(client, board, api):
 @override_settings(**SOOTA_ON)
 def test_the_panel_shows_on_the_board(client, board):
     content = client.get(reverse("board", args=[board.parent_token])).content
-    assert b"Add the birth star" in content
+    assert b"find the sounds from the birth star" in content
+    assert b'id="birth-star-form"' in content
 
 
 @override_settings(**SOOTA_ON)
@@ -314,7 +316,9 @@ def test_only_the_babys_own_sound_is_marked_even_when_a_star_repeats_one(client,
     board.save()
     content = client.get(reverse("board", args=[board.parent_token])).content.decode()
     assert content.count('class="is-own"') == 1
-    assert '<li class="is-own" aria-current="true">Dha</li><li>Pha</li><li>Dha</li>' in content
+    sounds = re.findall(r'<li( class="is-own" aria-current="true")?><button type="button" data-sound="(\w+)">', content)
+    assert [sound for _, sound in sounds] == ["Bhu", "Dha", "Pha", "Dha"]
+    assert sounds[1][0] and not sounds[3][0]
 
 
 @override_settings(**SOOTA_ON)
@@ -430,7 +434,7 @@ def test_a_card_gets_the_number_for_its_spelling(client, numbered, api):
     assert "Working out its number" in page
     assert not api.calls  # The page doesn't wait on Soota.
     response = client.get(number_url(numbered, name), **HTMX)
-    assert b"Name number 2 (Moon)." in response.content
+    assert "Number 2 · Moon" in response.content.decode()
     name.refresh_from_db()
     assert name.numerology == {"text": "Tilak", "total": 11, "number": 2, "planet": "Moon"}
     assert not Job.objects.filter(board=numbered).exists()
@@ -470,8 +474,8 @@ def test_it_says_when_a_number_matches_the_baby(client, numbered, api):
     numbered.save()
     name = Name.objects.create(board=numbered, text="Tilak", key="tilak")
     content = client.get(number_url(numbered, name), **HTMX).content
-    assert b"Same as the birth number." in content
-    assert b"Same as the destiny number." in content
+    assert b"The same as the birth number." in content
+    assert b"The same as the destiny number." in content
 
 
 @override_settings(**SOOTA_ON)
@@ -505,10 +509,11 @@ def test_names_without_a_latin_spelling_wait(client, numbered, api, text):
 
 
 @override_settings(**SOOTA_ON)
-def test_when_soota_fails_cards_stop_asking_and_show_nothing(client, numbered, monkeypatch):
+def test_when_soota_fails_cards_stop_asking_and_say_so(client, numbered, monkeypatch):
     monkeypatch.setattr(soota.httpx, "post", FakeSoota(status=503, body={"code": "engine_busy"}))
     name = Name.objects.create(board=numbered, text="Tilak", key="tilak")
-    assert client.get(number_url(numbered, name), **HTMX).content.strip() == b""
+    content = client.get(number_url(numbered, name), **HTMX).content
+    assert b"No number yet" in content and b"hx-get" not in content
     name.refresh_from_db()
     assert name.numerology == {}
 
@@ -536,3 +541,25 @@ def test_relatives_dont_get_numbers(numbered, api):
 
 def number_url_for_guest(board, name):
     return reverse("number", args=[board.guest_token, name.pk])
+
+
+def test_a_sound_the_parents_picked_wins_over_the_stars():
+    star = {"letters": ["Ra", "Ri"]}
+    assert brief_for_llm({}, star)["birth_sounds"] == ["Ra", "Ri"]
+    picked = brief_for_llm({"starts_with": "Che"}, star)
+    assert picked["starts_with"] == "Che" and "birth_sounds" not in picked
+
+
+@override_settings(**SOOTA_ON)
+def test_the_star_is_offered_where_the_starting_sound_is_chosen(client, board):
+    content = client.get(reverse("board", args=[board.parent_token])).content.decode()
+    step = content[content.index('class="step sound-step"') :]
+    assert "data-starts-with" in step and 'id="birth-star"' in step and 'name="numerology"' in step
+    assert content.count('id="birth-star"') == 1
+
+
+@override_settings(**SOOTA_ON)
+def test_birth_details_never_go_with_the_brief(client, board):
+    content = client.get(reverse("board", args=[board.parent_token])).content.decode()
+    for field in ("birth_date", "birth_time", "place", "consent"):
+        assert re.search(rf'name="{field}"[^>]*form="birth-star-form"', content)

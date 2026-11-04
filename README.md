@@ -38,15 +38,17 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Yes | Asks Cloudflare whether someone signing up is a person. If Cloudflare can't answer, sign-up pauses. |
 | `SECURE_SSL_REDIRECT`, `SECURE_HSTS_SECONDS` | No | On unless `DEBUG`. HSTS starts at a day: raise it to `31536000` once HTTPS is proven, because browsers can't be told to forget it. |
 | `WEB_CONCURRENCY` | No | Gunicorn workers. Defaults to 2. |
-| `HUEY_WORKERS` | No | Worker threads for the Huey consumer. Defaults to 4. One is always kept free for email. |
+| `HUEY_WORKERS` | No | Worker threads for email and Soota. Defaults to 2. One is always kept free for email. |
+| `LLM_WORKERS` | No | Worker threads for LLM calls, on their own queue. Defaults to 3. |
+| `TIME_ZONE` | No | For logs and dates shown on pages. Defaults to `Asia/Kolkata`. |
 | `AI_RATE_PER_IP`, `AI_RATE_PER_BOARD`, `AI_RATE_GLOBAL` | No | Limits on LLM spend, narrowest first. A request stopped by a narrow one doesn't count against the wider ones. |
 | `BOARD_CREATE_RATE`, `BOARD_CREATE_PER_USER`, `BOARD_RATE_PER_IP`, `ADD_RATE_PER_IP`, `GUEST_VOTERS_PER_IP` | No | Per-visitor and per-account limits. Generous, because mobile networks in India put many households behind one address. |
 | `GEMINI_MODEL`, `GEMINI_TTS_MODEL`, `GEMINI_TTS_VOICE` | No | Change models without touching code. |
-| `GEMINI_TIMEOUT_MS`, `GEMINI_ATTEMPTS` | No | How long one call may take, and how many tries it gets. Defaults to 60000 and 2. Together they must stay under the three minute job lease. |
+| `GEMINI_TIMEOUT_MS`, `GEMINI_ATTEMPTS` | No | How long one call may take, and how many tries it gets. Defaults to 30000 and 2. Together they must stay under the three minute job lease. |
 | `SOOTA_API_URL`, `SOOTA_API_KEY` | No | `http://soota-engine-gateway:8000`, and the key for the `naamadeva` client (`python -m engine_gateway.keys naamadeva` in Soota's repo). Soota isn't public, so the gateway must run on the same Coolify server, on the `coolify` network. Parents see the birth star panel once the URL is set. Mark the key as a secret. |
 | `SOOTA_TIMEOUT_SECONDS`, `SOOTA_AYANAMSHA`, `SOOTA_NUMEROLOGY_SYSTEM`, `BIRTH_STAR_RATE`, `PLACE_SEARCH_RATE` | No | How long to wait for an answer, Soota's ayanamsha index (2 is Lahiri), `chaldean` or `pythagorean`, and readings and place searches per board. |
 
-Emails, every LLM call and Soota requests run off the request path, queued to Redis with priorities and drained by Huey in a separate worker container. Emails go first and always have a thread free, so a slow LLM call can't hold up a sign-in code. Retries use Huey's task scheduler. In Coolify, run the worker as a second application from this repo with `CONTAINER_ROLE=worker`, the same environment as the web app, and health checks disabled. Deploy both on every push. Schedule `python manage.py run_jobs` every few minutes, on one of the two applications, to tidy finished jobs and pick up anything stranded by a restart. Schedule `python manage.py purge_inactive` daily: the Privacy Policy promises it. Bump `POLICY_VERSION` in settings when the policies change, and everyone is asked to accept again.
+Emails, every LLM call and Soota requests run off the request path, queued to Redis and drained by Huey in separate worker containers. LLM calls have their own queue and worker, so they can't hold up a sign-in code. Emails and Soota share the other, where emails go first and always have a thread free. Retries use Huey's task scheduler. In Coolify, run two more applications from this repo, one with `CONTAINER_ROLE=worker` and one with `CONTAINER_ROLE=llm-worker`, each with the same environment as the web app and health checks disabled. Deploy all three on every push. Schedule `python manage.py run_jobs` every few minutes, on one application only, to tidy finished jobs and pick up anything stranded by a restart. Schedule `python manage.py purge_inactive` daily: the Privacy Policy promises it. Bump `POLICY_VERSION` in settings when the policies change, and everyone is asked to accept again.
 
 Before launch, `python manage.py check --deploy` should list no `names.W` warnings. Also, outside this code: make the server reachable only through Cloudflare (a Tunnel, or a firewall allowing only Cloudflare's addresses), point a Zero Trust application at your `ADMIN_PATH`, and set a billing cap in Google Cloud.
 
@@ -63,7 +65,7 @@ Create a staff user with `python manage.py createsuperuser`, then open `/manage/
 ## Failure behaviour
 
 - **Gemini down or over its limit:** a clear message and a retry button. Catalogue suggestions, adding names and spotting duplicates don't use Gemini, so they keep working.
-- **Soota down:** one retry, then a message on the birth star panel, and the parent can try again. Cards simply go without a number. Nothing else depends on it.
+- **Soota down:** one retry, then a message on the birth star panel, and the parent can try again. Cards say "No number yet" and ask again next time. Nothing else depends on it.
 - **Open-Meteo down:** the place of birth box says the search isn't working, and a reading can't be started until it returns. Nothing else uses it.
 - **Redis down:** the site keeps working, and sessions fall back to the database. Actions under a rate limit pause until it returns. Background work waits in the database, and `run_jobs` catches up once Redis is back.
 - **Database down:** `/readyz` returns 503, while `/healthz` stays up so the container isn't restarted in a loop.

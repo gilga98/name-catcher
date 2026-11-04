@@ -358,7 +358,13 @@ main form.tune-form .step-q, .tune-form .field legend.step-q { font-size: 1.25re
 .star-head .hint { margin: 0; }
 .sounds { list-style: none; display: flex; flex-wrap: wrap; gap: .375rem; padding: 0; margin: .875rem 0; }
 .sounds li { display: grid; place-items: center; min-width: 2.75rem; height: 2.75rem; padding-inline: .5rem; border-radius: .875rem; background: var(--petal); font-family: var(--serif); font-size: 1.25rem; }
-.sounds .is-own { background: var(--plum); color: var(--z-primary-f); }
+.sounds li:has(button) { padding: 0; background: none; }
+.sounds button { width: 100%; height: 100%; min-width: 2.75rem; padding-inline: .5rem; border: 0; border-radius: inherit; background: var(--petal); color: inherit; font: inherit; cursor: pointer; }
+.sounds .is-own button { background: var(--plum); color: var(--z-primary-f); }
+.sound-step .birth-star { margin-top: .875rem; }
+.sound-wins { display: none; }
+.sound-step:has([data-starts-with]:not(:placeholder-shown)) .sound-wins { display: block; }
+.sound-step:has([data-starts-with]:not(:placeholder-shown)) .star-first { display: none; }
 .star-numbers { display: flex; gap: .5rem; margin: 0 0 .75rem; }
 .star-numbers div { flex: 1; padding: .5rem .75rem; border-radius: .875rem; background: var(--oat); }
 .star-numbers dt { font-size: .75rem; color: var(--mauve); }

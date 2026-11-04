@@ -27,5 +27,5 @@ def test_icons_escape_their_name():
 def test_the_brief_works_as_one_form_without_scripts(client):
     html = client.get(reverse("home")).content.decode()
     assert "data-wizard" in html
-    assert html.count("data-step") == 5
+    assert html.count("data-step") == 6
     assert 'type="submit"' in html

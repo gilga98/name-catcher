@@ -8,12 +8,15 @@ os.environ["AI_BACKEND"] = "names.ai.stub.StubAI"
 os.environ["SOOTA_API_URL"] = ""
 os.environ["SOOTA_API_KEY"] = ""
 
+from huey import MemoryHuey  # noqa: E402
+
 from .settings import *  # noqa: E402, F403
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 EMAIL_DELIVERY_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 JOBS_EAGER = True
+LLM_HUEY = MemoryHuey("name_catcher_llm", immediate=False)
 AI_ENRICH_BATCH_WINDOW_SECONDS = 0
 HUEY = {
     "huey_class": "huey.MemoryHuey",
