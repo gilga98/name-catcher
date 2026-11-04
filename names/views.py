@@ -15,7 +15,7 @@ from django_ratelimit.core import is_ratelimited
 from django_ratelimit.decorators import ratelimit
 from django_ratelimit.exceptions import Ratelimited
 
-from . import accounts, catalog, services
+from . import accounts, catalog, places, services
 from .ai.base import AIError
 from .analytics import allow_web_analytics
 from .forms import GENDERS, STYLES, UNIQUENESS, AddNameForm, BirthStarForm, BriefForm
@@ -270,6 +270,18 @@ def read_birth_star(request: HttpRequest, token: str) -> HttpResponse:
         return _birth_star_panel(request, form)
     services.start_birth_star(request.board, request.user, form.birth_input())
     return _birth_star_panel(request)
+
+
+@require_POST
+@with_board(parent_only=True)
+@ratelimit(group="place-search", key=_board_token, rate=settings.PLACE_SEARCH_RATE, block=True)
+def place_search(request: HttpRequest, token: str) -> JsonResponse:
+    """A POST, because a birth place doesn't belong in a URL, where logs would keep it."""
+    _require_soota()
+    try:
+        return JsonResponse({"places": places.search(request.POST.get("q", ""))})
+    except places.PlaceSearchError:
+        return JsonResponse({"error": "unavailable"}, status=503)
 
 
 @require_POST

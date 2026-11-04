@@ -47,35 +47,104 @@ async function fetchVoice(url) {
 }
 
 async function playAudio(button) {
-  const label = button.textContent;
+  button.classList.remove("is-ready");
   if (button.dataset.ready) {
     new Audio(button.dataset.ready).play();
-    button.textContent = label === "Tap to play" ? "Natural voice" : label;
     return;
   }
   button.disabled = true;
-  button.textContent = "Preparing…";
+  button.classList.add("is-busy");
   try {
     const source = URL.createObjectURL(await fetchVoice(button.dataset.audio));
     button.dataset.ready = source;
-    button.textContent = label;
     await new Audio(source).play();
   } catch (error) {
     // Browsers may block sound that starts long after the tap. The recording is ready for the next one.
-    if (error.name === "NotAllowedError") button.textContent = "Tap to play";
-    else {
-      button.textContent = label;
-      toast(error.message);
-    }
+    if (error.name === "NotAllowedError") button.classList.add("is-ready");
+    else toast(error.message);
   } finally {
     button.disabled = false;
+    button.classList.remove("is-busy");
   }
 }
 
+const COPIED_MS = 2000;
+
 async function copy(button) {
   await navigator.clipboard.writeText(document.querySelector(button.dataset.copy).value);
-  button.textContent = "Copied";
+  const label = button.querySelector("[data-label]");
+  const original = label.textContent;
+  label.textContent = "Copied";
+  setTimeout(() => { label.textContent = original; }, COPIED_MS);
 }
+
+function share(button) {
+  // Dismissing the phone's share sheet rejects, and that isn't a failure.
+  navigator.share({ url: document.querySelector(button.dataset.share).value }).catch(() => {});
+}
+
+// Only phones and some browsers can share, so the button appears only where it works.
+if (navigator.share) {
+  document.querySelectorAll("[data-share]").forEach((button) => { button.hidden = false; });
+}
+
+// The board's tabs. The hash keeps a person's place through the full reloads some actions need.
+function setupTabs(board) {
+  const links = board.querySelectorAll("[data-tab]");
+  const panels = board.querySelectorAll("[data-panel]");
+
+  function show(tab) {
+    board.dataset.active = tab;
+    panels.forEach((panel) => panel.classList.toggle("is-active", panel.dataset.panel === tab));
+    links.forEach((link) => {
+      if (link.dataset.tab === tab) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+  }
+
+  links.forEach((link) => link.addEventListener("click", (event) => {
+    event.preventDefault();
+    show(link.dataset.tab);
+    history.replaceState(null, "", link.getAttribute("href"));
+    window.scrollTo(0, 0);
+  }));
+
+  const start = location.hash.replace("#tab-", "");
+  if ([...links].some((link) => link.dataset.tab === start)) show(start);
+}
+
+// One question at a time. Without scripts, every question simply shows at once.
+function setupWizard(form) {
+  const steps = [...form.querySelectorAll("[data-step]")];
+  const back = form.querySelector("[data-wizard-back]");
+  const next = form.querySelector("[data-wizard-next]");
+  const progress = form.querySelector("[data-wizard-progress]");
+  progress.replaceChildren(...steps.map(() => document.createElement("i")));
+  let current = 0;
+
+  function go(index, { focus = true } = {}) {
+    current = index;
+    steps.forEach((step, position) => step.classList.toggle("is-current", position === index));
+    [...progress.children].forEach((bar, position) => bar.classList.toggle("is-done", position <= index));
+    back.hidden = index === 0;
+    form.classList.toggle("on-last", index === steps.length - 1);
+    if (focus) steps[index].querySelector(".step-q").focus({ preventScroll: true });
+  }
+
+  next.addEventListener("click", () => go(current + 1));
+  back.addEventListener("click", () => go(current - 1));
+  // Enter means "next question" until the last one, where it submits.
+  form.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || !event.target.matches("input") || current === steps.length - 1) return;
+    event.preventDefault();
+    go(current + 1);
+  });
+  form.classList.add("is-wizard");
+  go(0, { focus: false });
+}
+
+document.querySelectorAll("[data-board]").forEach(setupTabs);
+document.querySelectorAll("[data-wizard]").forEach(setupWizard);
 
 function dismissCookieNotice() {
   document.getElementById("cookie-notice").hidden = true;
@@ -111,10 +180,11 @@ document.querySelectorAll("[data-baby-photo]").forEach((image) => {
 
 document.addEventListener("click", (event) => {
   if (event.target.closest("[data-dismiss-cookies]")) dismissCookieNotice();
-  const button = event.target.closest("[data-say], [data-audio], [data-copy]");
+  const button = event.target.closest("[data-say], [data-audio], [data-copy], [data-share]");
   if (!button) return;
   if (button.dataset.say) say(button);
   else if (button.dataset.audio) playAudio(button);
+  else if (button.dataset.share) share(button);
   else copy(button);
 });
 

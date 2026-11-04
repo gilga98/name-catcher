@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
-from . import soota, turnstile
+from . import places, soota, turnstile
 from .catalog import themes_from_text
 from .dedup import clean as clean_spacing
 from .dedup import looks_like_name, phonetic_key
@@ -22,6 +22,7 @@ ORIGINS = [
 STYLES = [("any", "Either"), ("classic", "Classic"), ("modern", "Modern")]
 UNIQUENESS = [("any", "Any"), ("familiar", "Familiar"), ("uncommon", "Uncommon"), ("rare", "Rare")]
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024
+NOT_A_LISTED_PLACE = "Choose your place of birth from the list."
 
 
 AVATARS = [(f"a{number}", f"Baby picture {number}") for number in range(1, 7)]
@@ -59,15 +60,28 @@ class BriefForm(forms.Form):
 class BirthStarForm(forms.Form):
     birth_date = forms.DateField()
     birth_time = forms.TimeField()
-    place = forms.ChoiceField(choices=soota.PLACE_CHOICES)
+    place = forms.CharField(error_messages={"required": NOT_A_LISTED_PLACE})
     consent = forms.BooleanField(error_messages={"required": "Tick the box so we can send these details."})
+
+    def clean_place(self) -> dict:
+        try:
+            return places.read(self.cleaned_data["place"])
+        except places.BadPlace as exc:
+            raise forms.ValidationError(NOT_A_LISTED_PLACE) from exc
 
     def clean(self):
         cleaned = super().clean()
-        day, clock = cleaned.get("birth_date"), cleaned.get("birth_time")
-        if day and clock and soota.born_at(day, clock) > timezone.now():
+        day, clock, place = cleaned.get("birth_date"), cleaned.get("birth_time"), cleaned.get("place")
+        if day and clock and place and places.local_moment(day, clock, place) > timezone.now():
             self.add_error("birth_date", "A birth star can only be worked out after the birth.")
         return cleaned
+
+    def chosen_place(self) -> dict | None:
+        """So a place already chosen is still chosen when the form comes back because another field was wrong."""
+        try:
+            return places.read(self.data.get("place", ""))
+        except places.BadPlace:
+            return None
 
     def birth_input(self) -> dict:
         data = self.cleaned_data

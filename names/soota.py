@@ -7,64 +7,18 @@ number is worked out from the name alone, so nothing about the family goes with 
 
 import ipaddress
 import logging
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, time
 from urllib.parse import urlsplit
 
 import httpx
 from django.conf import settings
 from pydantic import BaseModel, Field, ValidationError
 
+from . import places
+
 logger = logging.getLogger(__name__)
 
-IST = timezone(timedelta(hours=5, minutes=30))
-_IST_HOURS = 5.5
 MAX_NAMES = 50  # What Soota takes in one request.
-# The star follows the Moon, which looks the same from anywhere in India, so the nearest large city is close enough.
-PLACES = {
-    "agartala": ("Agartala", 23.83, 91.29),
-    "ahmedabad": ("Ahmedabad", 23.02, 72.57),
-    "aizawl": ("Aizawl", 23.73, 92.72),
-    "amritsar": ("Amritsar", 31.63, 74.87),
-    "bengaluru": ("Bengaluru", 12.97, 77.59),
-    "bhopal": ("Bhopal", 23.26, 77.41),
-    "bhubaneswar": ("Bhubaneswar", 20.30, 85.82),
-    "chandigarh": ("Chandigarh", 30.73, 76.78),
-    "chennai": ("Chennai", 13.08, 80.27),
-    "coimbatore": ("Coimbatore", 11.02, 76.96),
-    "dehradun": ("Dehradun", 30.32, 78.03),
-    "delhi": ("Delhi", 28.61, 77.21),
-    "gangtok": ("Gangtok", 27.33, 88.61),
-    "guwahati": ("Guwahati", 26.14, 91.74),
-    "hyderabad": ("Hyderabad", 17.39, 78.49),
-    "imphal": ("Imphal", 24.82, 93.94),
-    "indore": ("Indore", 22.72, 75.86),
-    "jaipur": ("Jaipur", 26.91, 75.79),
-    "jammu": ("Jammu", 32.73, 74.86),
-    "kochi": ("Kochi", 9.93, 76.27),
-    "kohima": ("Kohima", 25.67, 94.11),
-    "kolkata": ("Kolkata", 22.57, 88.36),
-    "leh": ("Leh", 34.15, 77.58),
-    "lucknow": ("Lucknow", 26.85, 80.95),
-    "madurai": ("Madurai", 9.93, 78.12),
-    "mumbai": ("Mumbai", 19.08, 72.88),
-    "nagpur": ("Nagpur", 21.15, 79.09),
-    "panaji": ("Panaji", 15.49, 73.83),
-    "patna": ("Patna", 25.59, 85.14),
-    "port-blair": ("Port Blair", 11.62, 92.73),
-    "pune": ("Pune", 18.52, 73.86),
-    "raipur": ("Raipur", 21.25, 81.63),
-    "ranchi": ("Ranchi", 23.34, 85.31),
-    "shillong": ("Shillong", 25.58, 91.89),
-    "shimla": ("Shimla", 31.10, 77.17),
-    "srinagar": ("Srinagar", 34.08, 74.80),
-    "surat": ("Surat", 21.17, 72.83),
-    "thiruvananthapuram": ("Thiruvananthapuram", 8.52, 76.94),
-    "varanasi": ("Varanasi", 25.32, 82.97),
-    "vijayawada": ("Vijayawada", 16.51, 80.65),
-    "visakhapatnam": ("Visakhapatnam", 17.69, 83.22),
-}
-PLACE_CHOICES = [(slug, place[0]) for slug, place in PLACES.items()]
-
 
 class SootaError(Exception):
     """Soota couldn't answer. The text never holds birth details, and isn't meant for the person."""
@@ -99,19 +53,14 @@ class _Numerology(BaseModel):
     birth: _BirthNumbers | None = None
 
 
-def born_at(day: date, clock: time) -> datetime:
-    return datetime.combine(day, clock, tzinfo=IST)
-
-
-def birth_input(day: date, clock: time, place: str) -> dict:
+def birth_input(day: date, clock: time, place: dict) -> dict:
     """Soota's BirthInput, field for field. It refuses anything extra."""
-    _label, latitude, longitude = PLACES[place]
     return {
         "dob": day.isoformat(),
         "tob": clock.strftime("%H:%M:%S"),
-        "latitude": latitude,
-        "longitude": longitude,
-        "timezone_offset": _IST_HOURS,
+        "latitude": place["latitude"],
+        "longitude": place["longitude"],
+        "timezone_offset": places.utc_offset_hours(day, clock, place),
         "ayanamsha": settings.SOOTA_AYANAMSHA,
         "use_true_node": False,
     }

@@ -222,7 +222,7 @@ MAX_PENDING_CONTRIBUTIONS = env.int("MAX_PENDING_CONTRIBUTIONS", default=2000)
 ACCOUNT_RETENTION_DAYS = env.int("ACCOUNT_RETENTION_DAYS", default=730)
 
 # Published in the legal pages. Change POLICY_VERSION when the policies change: everyone accepts again.
-POLICY_VERSION = "2026-11-04.7"
+POLICY_VERSION = "2026-11-04.8"
 LEGAL_ENTITY_NAME = env("LEGAL_ENTITY_NAME", default="")
 LEGAL_ADDRESS = env("LEGAL_ADDRESS", default="")
 LEGAL_JURISDICTION_CITY = env("LEGAL_JURISDICTION_CITY", default="")
@@ -240,4 +240,5 @@ BOARD_CREATE_PER_USER = env("BOARD_CREATE_PER_USER", default="20/h")
 BOARD_RATE_PER_IP = env("BOARD_RATE_PER_IP", default="300/m")
 GUEST_VOTERS_PER_IP = env("GUEST_VOTERS_PER_IP", default="30/h")
 BIRTH_STAR_RATE = env("BIRTH_STAR_RATE", default="10/h")
+PLACE_SEARCH_RATE = env("PLACE_SEARCH_RATE", default="300/h")
 RATELIMIT_VIEW = "names.views.rate_limited"

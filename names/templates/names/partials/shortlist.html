@@ -1,16 +1,19 @@
-{% load birth_star %}<section id="shortlist" class="tile tile-shortlist"{% if oob %} hx-swap-oob="true"{% endif %}>
+{% load birth_star ui %}<section id="shortlist" class="shortlist"{% if oob %} hx-swap-oob="true"{% endif %}>
   <h2>Shortlist</h2>
   {% if shortlist %}
   <ol class="kept-list"{% if is_parent %} data-z-sortable="handle: .handle" hx-post="{% url 'rank' token %}" hx-trigger="moved" hx-include="this" hx-swap="none"{% endif %}>
     {% for name in shortlist %}
     <li class="kept">
-      {% if is_parent %}<input type="hidden" name="order" value="{{ name.pk }}"><span class="handle" title="Drag to reorder" aria-hidden="true">⠿</span>{% endif %}
-      <div class="kept-body">
-        <h3 class="name name-small">{{ name.text }}{% if surname %} <span class="surname">{{ surname }}</span>{% endif %}</h3>
+      {% if is_parent %}<input type="hidden" name="order" value="{{ name.pk }}"><span class="handle" title="Drag to reorder" aria-hidden="true">{% icon "grip" %}</span>{% endif %}
+      <span class="mono {{ name.key|tint }}" aria-hidden="true">{{ name.text|first|upper }}</span>
+      <details class="kept-body">
+        <summary>
+          <h3 class="name name-small">{{ name.text }}{% if surname %} <span class="surname">{{ surname }}</span>{% endif %}</h3>
+          {% if name.meaning %}<span class="kept-line">{{ name.meaning }}</span>{% endif %}
+        </summary>
         {% include "names/partials/name_details.html" %}
-        {% if birth_sounds and name.key|starts_with_sound:birth_sounds %}<p class="meta">Starts with a birth star sound.</p>{% endif %}
+        {% if birth_sounds and name.key|starts_with_sound:birth_sounds %}<p class="flag" title="Starts with a birth star sound.">{% icon "star" %}Birth star sound</p>{% endif %}
         {% if numerology_on %}{% include "names/partials/name_number.html" %}{% endif %}
-        {% if name.split %}<p class="z-badge split">Talk about this one: {{ name.partner_note|default:"one of you passed" }}</p>{% elif name.both_parents_love %}<p class="z-badge both">You both love this</p>{% elif name.partner_note %}<p class="partner-note{% if name.partner_kept %} did-keep{% endif %}">{{ name.partner_note }}</p>{% endif %}
         {% if name.variants %}
         <div class="variants">Also written:
           {% for variant in name.variants %}
@@ -23,14 +26,21 @@
           {% endfor %}
         </div>
         {% endif %}
+      </details>
+      <div class="kept-side">
+        <button class="vote" type="button" aria-pressed="{{ name.mine|yesno:'true,false' }}" aria-label="{{ name.mine|yesno:'Loved,Love it' }}, {{ name.votes.all|length }} vote{{ name.votes.all|length|pluralize }}" title="{% for vote in name.votes.all %}{{ vote.voter_name }}{% if not forloop.last %}, {% endif %}{% endfor %}" hx-post="{% url 'vote' token name.pk %}" hx-target="#shortlist" hx-swap="outerHTML">{% icon "heart" %}<span>{{ name.votes.all|length }}</span></button>
       </div>
-      <button class="z-button {% if name.mine %}z-button-primary{% else %}z-button-default{% endif %} vote" type="button" aria-pressed="{{ name.mine|yesno:'true,false' }}" title="{% for vote in name.votes.all %}{{ vote.voter_name }}{% if not forloop.last %}, {% endif %}{% endfor %}" hx-post="{% url 'vote' token name.pk %}" hx-target="#shortlist" hx-swap="outerHTML">{{ name.mine|yesno:"Loved,Love it" }} ({{ name.votes.all|length }})</button>
+      {% if name.split or name.both_parents_love or name.partner_note %}
+      <div class="kept-status">
+        {% if name.split %}<p class="flag flag-talk">{% icon "chat" %}Talk about this one: {{ name.partner_note|default:"one of you passed" }}</p>{% elif name.both_parents_love %}<p class="flag flag-both">{% icon "heart" %}You both love this</p>{% elif name.partner_note %}<p class="flag partner-note{% if name.partner_kept %} did-keep{% endif %}">{{ name.partner_note }}</p>{% endif %}
+      </div>
+      {% endif %}
     </li>
     {% endfor %}
   </ol>
   {% elif is_parent %}
-  <p class="hint">Names you swipe right land here. Share the family link once you have a few.</p>
+  <div class="empty">{% icon "heart" %}<p>Names you keep land here.</p></div>
   {% else %}
-  <p class="hint">The parents haven't kept any names yet. Suggest one below.</p>
+  <div class="empty">{% icon "heart" %}<p>No names yet. Suggest the first.</p></div>
   {% endif %}
 </section>

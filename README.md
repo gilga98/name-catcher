@@ -43,7 +43,7 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 | `BOARD_CREATE_RATE`, `BOARD_CREATE_PER_USER`, `BOARD_RATE_PER_IP`, `ADD_RATE_PER_IP`, `GUEST_VOTERS_PER_IP` | No | Per-visitor and per-account limits. Generous, because mobile networks in India put many households behind one address. |
 | `GEMINI_MODEL`, `GEMINI_TTS_MODEL`, `GEMINI_TTS_VOICE` | No | Change models without touching code. |
 | `SOOTA_API_URL`, `SOOTA_API_KEY` | No | `http://soota-engine-gateway:8000`, and the key for the `naamadeva` client (`python -m engine_gateway.keys naamadeva` in Soota's repo). Soota isn't public, so the gateway must run on the same Coolify server, on the `coolify` network. Parents see the birth star panel once the URL is set. Mark the key as a secret. |
-| `SOOTA_TIMEOUT_SECONDS`, `SOOTA_AYANAMSHA`, `SOOTA_NUMEROLOGY_SYSTEM`, `BIRTH_STAR_RATE` | No | How long to wait for an answer, Soota's ayanamsha index (2 is Lahiri), `chaldean` or `pythagorean`, and readings per board. |
+| `SOOTA_TIMEOUT_SECONDS`, `SOOTA_AYANAMSHA`, `SOOTA_NUMEROLOGY_SYSTEM`, `BIRTH_STAR_RATE`, `PLACE_SEARCH_RATE` | No | How long to wait for an answer, Soota's ayanamsha index (2 is Lahiri), `chaldean` or `pythagorean`, and readings and place searches per board. |
 
 Emails, every LLM call and Soota requests run off the request path, on background threads inside each web process (`names/jobs.py`), so there's no extra container. Schedule `python manage.py run_jobs` every few minutes to pick up anything stranded by a restart. Schedule `python manage.py purge_inactive` daily: the Privacy Policy promises it. Bump `POLICY_VERSION` in settings when the policies change, and everyone is asked to accept again.
 
@@ -63,6 +63,7 @@ Create a staff user with `python manage.py createsuperuser`, then open `/manage/
 
 - **Gemini down or over its limit:** a clear message and a retry button. Catalogue suggestions, adding names and spotting duplicates don't use Gemini, so they keep working.
 - **Soota down:** one retry, then a message on the birth star panel, and the parent can try again. Cards simply go without a number. Nothing else depends on it.
+- **Open-Meteo down:** the place of birth box says the search isn't working, and a reading can't be started until it returns. Nothing else uses it.
 - **Redis down:** the site keeps working, and sessions fall back to the database. Actions under a rate limit pause until it returns.
 - **Database down:** `/readyz` returns 503, while `/healthz` stays up so the container isn't restarted in a loop.
 
@@ -75,4 +76,5 @@ Create a staff user with `python manage.py createsuperuser`, then open `/manage/
 - `names/ai/`: small interfaces (`base.py`) with Gemini and offline implementations. `AI_BACKEND` picks one.
 - `names/dedup.py`: phonetic keys and fuzzy matching. Close matches are always confirmed by the person.
 - `names/services.py`: what families can do. `names/views.py` only translates HTTP.
+- `names/places.py`: place of birth search, and the time zone offset for a birth.
 - `names/soota.py`: asks Soota for birth stars and numerology, and the only code that reads its answers.

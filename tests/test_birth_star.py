@@ -10,7 +10,7 @@ from django.test import Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from names import jobs, services, soota
+from names import jobs, places, services, soota
 from names.accounts import export_data, record_consent
 from names.ai.base import NameIdea
 from names.ai.context import brief_for_llm
@@ -20,7 +20,8 @@ pytestmark = pytest.mark.django_db
 HTMX = {"HTTP_HX_REQUEST": "true"}
 SOOTA_ON = {"SOOTA_API_URL": "https://soota.test", "SOOTA_API_KEY": "secret-key"}
 PARK = {"JOBS_EAGER": False}  # Work waits in the queue, as it does between a request and the worker.
-FORM = {"birth_date": "1990-01-15", "birth_time": "10:30", "place": "delhi", "consent": "on"}
+DELHI = {"label": "Delhi, India", "latitude": 28.65195, "longitude": 77.23149, "timezone": "Asia/Kolkata"}
+FORM = {"birth_date": "1990-01-15", "birth_time": "10:30", "place": places.sign(DELHI), "consent": "on"}
 STAR = {
     "nakshatra": "Purva Phalguni", "pada": 3, "sign": "Leo", "letter": "Ti", "letters": ["Mo", "Ta", "Ti", "Tu"],
     "birth_number": 6, "destiny_number": 8,
@@ -110,7 +111,7 @@ def test_a_reading_stores_the_star_and_nothing_about_the_birth(client, board, ap
     assert board.birth_star == STAR
     assert not Job.objects.filter(board=board).exists()
     stored = everything_stored(board)
-    for detail in ("1990", "10:30", "28.61", "delhi"):
+    for detail in ("1990", "10:30", "28.65", "Delhi"):
         assert detail not in stored
 
 
@@ -127,8 +128,8 @@ def test_the_request_is_exactly_what_soota_accepts(client, board, api):
         "birth": {
             "dob": "1990-01-15",
             "tob": "10:30:00",
-            "latitude": 28.61,
-            "longitude": 77.21,
+            "latitude": 28.65195,
+            "longitude": 77.23149,
             "timezone_offset": 5.5,
             "ayanamsha": 2,
             "use_true_node": False,

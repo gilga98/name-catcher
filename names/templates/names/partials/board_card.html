@@ -1,0 +1,4 @@
+{% with avatar=board.brief.avatar|default:"a1" %}<a class="board-card" href="{% url 'board' board.parent_token %}">
+  {% include "names/partials/baby_avatar.html" %}
+  <span><strong>{% if board.brief.nickname %}{{ board.brief.nickname }}{% elif board.brief.surname %}Baby {{ board.brief.surname }}{% else %}Baby names{% endif %}</strong><small>{{ board.names.all|length }} name{{ board.names.all|length|pluralize }}</small></span>
+</a>{% endwith %}

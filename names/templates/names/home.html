@@ -1,44 +1,52 @@
 {% extends "names/base.html" %}
+{% load ui %}
 {% block robots %}index{% endblock %}
 {% block content %}
-<div class="bento">
-  <header class="tile tile-hero">
+{% if boards %}
+<section class="home-boards">
+  <h1>Your boards</h1>
+  <ul class="board-cards">{% for board in boards %}<li>{% include "names/partials/board_card.html" %}</li>{% endfor %}</ul>
+</section>
+{% else %}
+<header class="hero">
+  <div class="hero-copy">
     <h1>Find a name you'll both love.</h1>
-    <p>Pick what matters to you. You'll get names with their meanings and how to say them, then your family can vote on your favourites.</p>
-  </header>
-  <section class="tile tile-scripts" aria-label="The same name, in any script">
-    <p class="scripts" aria-hidden="true"><span lang="hi">अहना</span><span lang="kn">ಅಹನಾ</span><span lang="bn">অহনা</span><span>Ahana</span></p>
-    <h2>One name, however it's written</h2>
-    <p>Your aunt types it in Kannada, your partner in English. We spot that it's the same name.</p>
-  </section>
-  <section class="tile tile-steps">
-    <h2>How it works</h2>
-    <ol class="steps">
-      <li>Tell us what you're looking for</li>
-      <li>You and your partner each swipe through names</li>
-      <li>Share a link so family can vote</li>
-    </ol>
-  </section>
-  {% if boards %}
-  <section class="tile tile-boards">
-    <h2>Your boards</h2>
-    <ul class="board-list">{% for board in boards %}<li><a href="{% url 'board' board.parent_token %}">{% if board.brief.surname %}Baby {{ board.brief.surname }}{% else %}Baby names{% endif %}</a></li>{% endfor %}</ul>
-  </section>
-  {% endif %}
-  {% if not user.is_authenticated %}
-  <section class="tile tile-privacy">
-    <h2>Before you sign up</h2>
-    <p>We collect your email, what you tell us about the name you want, and the names you save, so we can run your board. Most suggestions come from our own catalogue. When AI helps, it sees your preferences and description, but not who you are.</p>
-    <p class="link-row"><a href="{% url 'privacy' %}">Privacy Policy</a> <a href="{% url 'terms' %}">Terms of Use</a> <a href="{% url 'cookies' %}">Cookies</a> <a href="{% url 'disclaimer' %}">Disclaimer</a></p>
-    <p class="hint">For adults 18 and over. Meanings are a starting point, so check anything important with someone you trust.</p>
-  </section>
-  {% endif %}
-</div>
-<form method="post" class="brief-form">
+    <p>Swipe through names, hear how they sound, and let your family vote.</p>
+    <a class="hero-cta" href="#start">Start{% icon "right" %}</a>
+  </div>
+  <div class="fan" aria-hidden="true">
+    <div class="fan-card tint-2"><svg class="card-bloom"><use href="#i-bloom"></use></svg><b lang="bn">অহনা</b><span>Ahana</span></div>
+    <div class="fan-card tint-1"><svg class="card-bloom"><use href="#i-bloom"></use></svg><b lang="kn">ಅಹನಾ</b><span>Ahana</span></div>
+    <div class="fan-card tint-0"><svg class="card-bloom"><use href="#i-bloom"></use></svg><b lang="hi">अहना</b><span>Ahana</span><i>{% icon "heart" %}</i></div>
+  </div>
+</header>
+<ol class="how">
+  <li><span>{% icon "sliders" %}</span>Tell us what you like</li>
+  <li><span>{% icon "cards" %}</span>You both swipe</li>
+  <li><span>{% icon "people" %}</span>Family votes</li>
+</ol>
+{% endif %}
+
+<form method="post" class="wizard" id="start" data-wizard>
   {% csrf_token %}
-  <h2 class="form-title">{% if boards %}Start another board{% else %}What are you looking for?{% endif %}</h2>
-  <div class="brief-grid">{% include "names/partials/brief_fields.html" with form=form %}</div>
-  <button class="z-button z-button-primary z-button-large submit" type="submit">Show me names</button>
-  <p class="hint">Everything is optional. {% if not user.is_authenticated %}Next you'll create a free account, so your names stay yours.{% endif %}</p>
+  <h2 class="wizard-title">{% if boards %}Start another board{% else %}What are you looking for?{% endif %}</h2>
+  <div class="wizard-progress" data-wizard-progress aria-hidden="true"></div>
+  <div class="brief-steps">{% include "names/partials/brief_fields.html" with form=form %}</div>
+  <div class="wizard-nav">
+    <button class="say-button wizard-back" type="button" data-wizard-back aria-label="Back" title="Back" hidden>{% icon "left" %}</button>
+    <button class="text-button wizard-skip" type="submit">Skip to names</button>
+    <button class="z-button z-button-primary z-button-large wizard-next" type="button" data-wizard-next>Next</button>
+    <button class="z-button z-button-primary z-button-large wizard-submit" type="submit">Show me names</button>
+  </div>
+  <p class="hint wizard-note">All optional. {% if not user.is_authenticated %}Next you'll create a free account, so your names stay yours.{% endif %}</p>
 </form>
+
+{% if not user.is_authenticated %}
+<details class="notice disclosure">
+  <summary>{% icon "shield" %}What we collect, before you sign up</summary>
+  <p>We collect your email, what you tell us about the name you want, and the names you save, so we can run your board. Most suggestions come from our own catalogue. When AI helps, it sees your preferences and description, but not who you are.</p>
+  <p class="link-row"><a href="{% url 'privacy' %}">Privacy Policy</a> <a href="{% url 'terms' %}">Terms of Use</a> <a href="{% url 'cookies' %}">Cookies</a> <a href="{% url 'disclaimer' %}">Disclaimer</a></p>
+  <p class="hint">For adults 18 and over. Meanings are a starting point, so check anything important with someone you trust.</p>
+</details>
+{% endif %}
 {% endblock %}

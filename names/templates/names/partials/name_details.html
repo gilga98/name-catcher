@@ -1,13 +1,17 @@
-{% if name.respelling %}
+{% load ui %}{% if name.respelling %}
 {% if name.native and name.native != name.text %}<p class="native" lang="{{ name.speech_lang }}">{{ name.native }}</p>{% endif %}
 {% include "names/partials/say.html" %}
 {% if name.meaning %}<p class="meaning">{{ name.meaning }}</p>{% endif %}
 {% if name.tags %}<ul class="tags" aria-label="Tags">{% for tag in name.tags %}<li>{{ tag }}</li>{% endfor %}</ul>{% endif %}
-<ul class="insights">
-  {% if name.insight %}<li>{{ name.insight }}</li>{% endif %}
-  {% if name.surname_fit %}<li>{{ name.surname_fit }}</li>{% endif %}
-  <li>{{ name.syllables }} syllable{{ name.syllables|pluralize }}</li>
-</ul>
+{% if name.insight or name.surname_fit %}
+<details class="why">
+  <summary>{% icon "info" %}More about it</summary>
+  <ul class="insights">
+    {% if name.insight %}<li>{{ name.insight }}</li>{% endif %}
+    {% if name.surname_fit %}<li>{{ name.surname_fit }}</li>{% endif %}
+  </ul>
+</details>
+{% endif %}
 {% elif no_details %}
 <p class="hint">This one isn't in our catalogue yet.</p>
 {% else %}

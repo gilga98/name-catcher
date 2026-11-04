@@ -1,45 +1,48 @@
 {% extends "names/base.html" %}
+{% load ui %}
 {% block title %}Settings Naamadeva{% endblock %}
 {% block content %}
+<h1 class="page-title">Settings</h1>
 <div class="bento">
   <section class="tile tile-half">
-    <h1 class="tile-title">Settings</h1>
     <form method="post">
       {% csrf_token %}
       {{ form.as_p }}
-      <p class="hint">With AI off, you only get names from our catalogue, and a name that isn't in it has no meaning shown. On a shared board, one parent switching it off turns it off for the board.</p>
+      <p class="hint">With AI off, you only get catalogue names, and a name outside it shows no meaning. On a shared board, either parent can switch it off.</p>
       <button class="z-button z-button-primary" type="submit">Save settings</button>
     </form>
   </section>
   <section class="tile tile-half">
     <h2>Sign-in</h2>
-    <ul class="link-list">
-      <li><a href="{% url 'account_email' %}">Change your email</a></li>
-      <li><a href="{% url 'account_change_password' %}">Change your password</a></li>
-      <li><a href="{% url 'socialaccount_connections' %}">Connected Google account</a></li>
-      <li><a href="{% url 'mfa_index' %}">Two-factor sign-in</a></li>
+    <ul class="link-rows">
+      <li><a href="{% url 'account_email' %}">{% icon "mail" %}Change your email</a></li>
+      <li><a href="{% url 'account_change_password' %}">{% icon "key" %}Change your password</a></li>
+      <li><a href="{% url 'socialaccount_connections' %}">{% icon "link" %}Connected Google account</a></li>
+      <li><a href="{% url 'mfa_index' %}">{% icon "phone" %}Two-factor sign-in</a></li>
     </ul>
   </section>
   <section class="tile tile-half">
-    <h2>Download your data</h2>
-    <p class="hint">Your account details, boards, names, contributions and consent history, as a JSON file.</p>
-    <a class="z-button z-button-default" href="{% url 'account_export' %}">Download my data</a>
+    <h2>Your data</h2>
+    <ul class="link-rows">
+      <li><a href="{% url 'account_export' %}">{% icon "download" %}Download my data</a></li>
+      <li><a href="{% url 'grievance' %}">{% icon "chat" %}Grievances and your rights</a></li>
+    </ul>
+    <p class="hint">The download has your account details, boards, names, contributions and consent history, as a JSON file. To correct something, nominate someone or complain, see grievances and your rights.</p>
   </section>
   <section class="tile tile-half">
     <h2>Consents you've given</h2>
     {% if consents %}
-    <ul class="link-list">{% for consent in consents %}<li>{{ consent.get_purpose_display }}, policy version {{ consent.policy_version }}, {{ consent.get_action_display|lower }} on {{ consent.created_at|date:"j M Y" }}</li>{% endfor %}</ul>
+    <ul class="consent-list">{% for consent in consents %}<li>{% icon "check" %}<span>{{ consent.get_purpose_display }}, policy version {{ consent.policy_version }}, {{ consent.get_action_display|lower }} on {{ consent.created_at|date:"j M Y" }}</span></li>{% endfor %}</ul>
     {% else %}<p class="hint">None recorded.</p>{% endif %}
-    <p class="hint">To correct something we hold, nominate someone to act for you, or raise a complaint, see <a href="{% url 'grievance' %}">grievances and your rights</a>.</p>
   </section>
-  <section class="tile tile-danger tile-full">
-    <h2>Delete your account</h2>
+  <details class="tile disclosure danger-zone tile-danger">
+    <summary>Delete your account</summary>
     <p class="hint">This withdraws your consent and deletes your account and any board only you belong to. A board shared with your partner stays with them, without your votes. Names you contributed stay in the catalogue with no link to you. This can't be undone.</p>
     <form method="post" action="{% url 'account_delete' %}">
       {% csrf_token %}
       {{ delete_form.as_p }}
       <button class="z-button z-button-danger" type="submit">Delete my account</button>
     </form>
-  </section>
+  </details>
 </div>
 {% endblock %}

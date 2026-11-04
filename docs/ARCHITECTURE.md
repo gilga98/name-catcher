@@ -8,7 +8,7 @@ flowchart TB
     engine["engine.js: rank, diversify, learn taste"]
     voice["Device speech voice"]
     cache["HTTP cache: catalogue shard"]
-    ui["HTMX pages and bento UI"]
+    ui["HTMX pages"]
   end
 
   subgraph server["Django on Coolify, hosted in India"]
@@ -85,7 +85,7 @@ sequenceDiagram
 
 ## Background work
 
-Nothing talks to a third party while a person waits, except the Google sign-in callback, which has to finish before the page can load. Jobs are rows in the database and run on thread pools inside each web process (`names/jobs.py`). Email, LLM and Soota have separate pools, so a slow LLM call can't delay a sign-in code.
+Nothing talks to a third party while a person waits, except the Google sign-in callback, which has to finish before the page can load, and place of birth search, whose answer is what the person is waiting for. Jobs are rows in the database and run on thread pools inside each web process (`names/jobs.py`). Email, LLM and Soota have separate pools, so a slow LLM call can't delay a sign-in code.
 
 | Work | Person sees | Then |
 |---|---|---|
@@ -99,14 +99,17 @@ Nothing talks to a third party while a person waits, except the Google sign-in c
 
 ## How a birth star works
 
-A parent can enter a baby's date and time of birth and nearest city, after a separate consent. `names/soota.py` sends them to `POST /v1/natal` on Soota's engine gateway, with Naamadeva's API key, and reads the Moon's nakshatra, pada, sign and naming sounds from the answer. It reads only those fields, so new fields in Soota's answers change nothing, and an answer without them fails rather than guessing.
+A parent can enter a baby's date, time and place of birth, after a separate consent. `names/soota.py` sends them to `POST /v1/natal` on Soota's engine gateway, with Naamadeva's API key, and reads the Moon's nakshatra, pada, sign and naming sounds from the answer. It reads only those fields, so new fields in Soota's answers change nothing, and an answer without them fails rather than guessing.
 
 Soota isn't reachable from the internet. Naamadeva calls the gateway by its service name on the Coolify network, so that traffic stays on our server and isn't encrypted. `names/soota.py` therefore refuses plain HTTP to anything but a private address, so a mistaken URL can't send birth details across the internet.
 
 - **Birth details aren't kept.** They wait in a job row, then the row goes: on success at once, and on failure its payload is cleared. `run_jobs` deletes anything left after an hour. They never reach the brief, the session or the logs.
 - **The result is private to parents.** `Board.birth_star` is outside the brief, so saving the brief can't erase it, and relatives never receive it. "Remove birth star" deletes it and records the withdrawal.
 - **It favours, and doesn't limit.** `engine.js` scores the baby's own sound highest, then the star's other sounds. Comparing phonetic keys means this works for any script. "Starts with" remains the hard limit.
-- **Only births in India for now,** because the form assumes IST and offers Indian cities. The star follows the Moon, so a nearby city is close enough.
+- **The time zone comes from the place.** Soota needs coordinates and a UTC offset. `names/places.py` works the offset out from the place's time zone for that date and time, so daylight saving and past changes are right. A wrong offset moves the Moon, and can change the star.
+- **Place search goes through our server.** Open-Meteo sees what was typed, not who typed it, and the text travels in a POST so it stays out of URLs and logs. The answer is the one thing here a person waits for, because they're watching the list. Searches are cached for a day.
+- **The list is cleaned first.** Towns and cities only, one row per real place, with the district added only when it's what tells two towns apart. India and exact matches come first. Open-Meteo doesn't know former names like Bombay or Madras and answers with places abroad, so `FORMER_NAMES` leads them to the city in India.
+- **Only a place from the list can be sent.** Each option is a signed value holding its coordinates and time zone, so a reading can't use a place no search returned.
 
 ## How numerology works
 

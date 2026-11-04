@@ -1,4 +1,4 @@
-{% load static %}<!doctype html>
+{% load static ui %}<!doctype html>
 <html lang="en" class="z-layout-small">
 <head>
   <meta charset="utf-8">
@@ -18,16 +18,17 @@
   {% block scripts %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  {% include "names/partials/icons.html" %}
   <main class="page">
     <header class="topbar">
-      <a class="wordmark" href="{% url 'home' %}"><img src="{% static 'names/bloom.svg' %}" alt="" width="24" height="24">Naamadeva</a>
+      <a class="wordmark" href="{% url 'home' %}"><svg class="wordmark-bloom" aria-hidden="true" focusable="false"><use href="#i-bloom"></use></svg>Naamadeva</a>
       <nav class="account" aria-label="Account">
         {% if user.is_authenticated %}
-        <a href="{% url 'dashboard' %}">Dashboard</a>
-        <a href="{% url 'account_settings' %}">Settings</a>
-        {% if user.is_staff %}<a href="{% url 'admin:index' %}">Admin</a>{% endif %}
-        <a href="{% url 'account_logout' %}">Sign out</a>
-        {% elif not is_guest %}<a href="{% url 'account_login' %}">Sign in</a>{% endif %}
+        <a href="{% url 'dashboard' %}" title="Dashboard">{% icon "grid" %}<span>Dashboard</span></a>
+        <a href="{% url 'account_settings' %}" title="Settings">{% icon "gear" %}<span>Settings</span></a>
+        {% if user.is_staff %}<a href="{% url 'admin:index' %}" title="Admin">{% icon "admin" %}<span>Admin</span></a>{% endif %}
+        <a href="{% url 'account_logout' %}" title="Sign out">{% icon "exit" %}<span>Sign out</span></a>
+        {% elif not is_guest %}<a href="{% url 'account_login' %}">{% icon "person" %}<span class="always">Sign in</span></a>{% endif %}
       </nav>
     </header>
     {% for message in messages %}<p class="z-alert" role="status">{{ message }}</p>{% endfor %}
@@ -43,7 +44,7 @@
     </footer>
   </main>
   <aside class="cookie-notice" id="cookie-notice" hidden>
-    <p>We only use cookies that keep you signed in and keep forms secure. <a href="{% url 'cookies' %}">Read the cookie policy</a></p>
+    <p>Only the cookies that keep you signed in and forms secure. <a href="{% url 'cookies' %}">Cookie policy</a></p>
     <button class="z-button z-button-default z-button-small" type="button" data-dismiss-cookies>Got it</button>
   </aside>
 </body>

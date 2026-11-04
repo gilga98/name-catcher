@@ -38,6 +38,7 @@ urlpatterns = [
     path("b/<str:token>/birth-star", views.birth_star, name="birth_star"),
     path("b/<str:token>/birth-star/read", views.read_birth_star, name="read_birth_star"),
     path("b/<str:token>/birth-star/remove", views.remove_birth_star, name="remove_birth_star"),
+    path("b/<str:token>/birth-star/places", views.place_search, name="place_search"),
     path("b/<str:token>/suggest", views.suggest, name="suggest"),
     path("b/<str:token>/catalog.json", views.catalog_shard, name="catalog_shard"),
     path("b/<str:token>/suggest/catalog", views.suggest_from_catalog, name="suggest_from_catalog"),

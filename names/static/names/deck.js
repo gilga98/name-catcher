@@ -10,8 +10,17 @@
   const empty = document.getElementById("deck-empty");
   const topCard = () => review.querySelector(".name-card");
   const threshold = () => Math.min(120, review.clientWidth * 0.3);
+  const hint = document.getElementById("deck-hint");
+  const HINT_SEEN = "swipe-hint-seen";
   let drag = null;
   let lastUndoUrl = "";
+
+  function learnedToSwipe() {
+    hint.hidden = true;
+    try { localStorage.setItem(HINT_SEEN, "1"); } catch { /* The hint just comes back next time. */ }
+  }
+
+  try { hint.hidden = localStorage.getItem(HINT_SEEN) === "1"; } catch { hint.hidden = false; }
 
   function place(card, dx) {
     card.style.transform = dx ? `translateX(${dx}px) rotate(${dx / 22}deg)` : "";
@@ -57,6 +66,7 @@
 
   document.addEventListener("keydown", (event) => {
     if (event.target.closest?.("input, textarea, select, summary") || event.altKey || event.metaKey || event.ctrlKey) return;
+    if (!review.offsetParent) return; // Another tab is showing, so this person can't see what they'd be deciding on.
     const card = topCard();
     if (!card || (event.key !== "ArrowRight" && event.key !== "ArrowLeft")) return;
     event.preventDefault();
@@ -69,6 +79,7 @@
     const card = button.closest(".name-card");
     lastUndoUrl = card.dataset.undoUrl;
     undo.hidden = false;
+    learnedToSwipe();
     const name = card.querySelector(".name").firstChild.textContent.trim();
     status.textContent = button.dataset.taste === "liked" ? `Kept ${name}.` : `Passed on ${name}.`;
   });
@@ -80,7 +91,18 @@
     undo.hidden = true;
   });
 
-  const refresh = () => { empty.hidden = Boolean(topCard()); };
+  const count = document.getElementById("deck-count");
+  const shortlistCount = document.querySelector("[data-shortlist-count]");
+
+  const refresh = () => {
+    const left = review.querySelectorAll(".name-card").length;
+    empty.hidden = left > 0;
+    count.hidden = left === 0;
+    count.lastElementChild.textContent = `${left} to go`;
+    const kept = document.querySelectorAll("#shortlist .kept").length;
+    shortlistCount.textContent = kept;
+    shortlistCount.hidden = kept === 0;
+  };
   document.body.addEventListener("htmx:afterSettle", refresh);
   // If the server refused, put the card back rather than losing it.
   document.body.addEventListener("htmx:responseError", () => {
@@ -138,8 +160,9 @@
   const input = document.getElementById("baby-photo-input");
   const remove = document.getElementById("baby-photo-remove");
   const key = `baby-photo-${input.dataset.board}`;
-  const avatar = document.querySelector("[data-baby-photo]");
-  const original = avatar.dataset.original || avatar.getAttribute("src");
+  const avatars = document.querySelectorAll("[data-baby-photo]");
+  const original = avatars[0].dataset.original || avatars[0].getAttribute("src");
+  const showPicture = (source) => avatars.forEach((avatar) => { avatar.src = source; });
 
   function read() {
     try { return localStorage.getItem(key); } catch { return null; }
@@ -156,7 +179,7 @@
     // Redrawing also drops the file's metadata, such as GPS location.
     canvas.getContext("2d").drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 160, 160);
     const photo = canvas.toDataURL("image/jpeg", 0.8);
-    avatar.src = photo;
+    showPicture(photo);
     remove.hidden = false;
     try { localStorage.setItem(key, photo); } catch { /* Shows until the page closes if storage is blocked. */ }
     input.value = "";
@@ -164,7 +187,7 @@
 
   remove.addEventListener("click", () => {
     try { localStorage.removeItem(key); } catch { /* Nothing was stored. */ }
-    avatar.src = original;
+    showPicture(original);
     remove.hidden = true;
   });
 })();

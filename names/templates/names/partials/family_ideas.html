@@ -1,7 +1,7 @@
-{% if ideas %}
+{% load ui %}{% if ideas %}
 <ul class="ideas">
   {% for idea in ideas %}
-  <li><button class="idea" type="button" data-idea name="text" value="{{ idea.text }}" hx-post="{% url 'add' token %}" hx-include="#add-by" hx-target="#add-result"><strong>{{ idea.text }}</strong>{% if idea.meaning %}<span>{{ idea.meaning }}</span>{% endif %}</button></li>
+  <li><button class="idea" type="button" data-idea name="text" value="{{ idea.text }}" hx-post="{% url 'add' token %}" hx-include="#add-by" hx-target="#add-result"><span class="mono {{ idea.text|tint }}" aria-hidden="true">{{ idea.text|first|upper }}</span><span class="idea-text"><strong>{{ idea.text }}</strong>{% if idea.meaning %}<span>{{ idea.meaning }}</span>{% endif %}</span>{% icon "plus" %}</button></li>
   {% endfor %}
 </ul>
 {% elif not pending %}
