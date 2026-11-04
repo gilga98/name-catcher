@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "allauth.socialaccount.providers.google",
     "allauth.mfa",
     "django_htmx",
+    "huey.contrib.djhuey",
 ]
 MIDDLEWARE = [
     "config.health.HealthCheckMiddleware",
@@ -87,12 +88,30 @@ if REDIS_URL:
         }
     }
     DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
+    HUEY = {
+        "huey_class": "huey.RedisHuey",
+        "name": "name_catcher",
+        "url": REDIS_URL,
+        "immediate": False,
+        "consumer": {
+            "workers": env.int("HUEY_WORKERS", default=2),
+            "worker_type": "thread",
+        },
+    }
 else:
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
     SILENCED_SYSTEM_CHECKS = ["django_ratelimit.E003", "django_ratelimit.W001"]
+    HUEY = {
+        "huey_class": "huey.MemoryHuey",
+        "name": "name_catcher",
+        "immediate": False,
+    }
 SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
 
-AUTHENTICATION_BACKENDS = ["allauth.account.auth_backends.AuthenticationBackend"]
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": f"django.contrib.auth.password_validation.{validator}"}
     for validator in ("UserAttributeSimilarityValidator", "MinimumLengthValidator", "CommonPasswordValidator")

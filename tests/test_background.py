@@ -7,6 +7,7 @@ from django.core.cache import cache
 from django.core.mail import send_mail
 from django.test import Client, override_settings
 from django.urls import reverse
+from huey.contrib.djhuey import HUEY
 
 from names import catalog, jobs, services
 from names.accounts import record_consent
@@ -22,6 +23,7 @@ PARK = {"JOBS_EAGER": False}  # Work waits in the queue, as it does between a re
 @pytest.fixture(autouse=True)
 def clear_cache():
     cache.clear()
+    HUEY.flush()
 
 
 def idea(given, name=None, meaning="A meaning"):
@@ -438,3 +440,32 @@ def test_admin_job_list_never_shows_message_contents(settings):
     assert response.status_code == 200 and b"SECRET123" not in response.content
     detail = client.get(reverse("admin:names_job_change", args=[Job.objects.get().pk]))
     assert b"SECRET123" not in detail.content
+
+
+def test_huey_drain_queue_task_executes_pending_work(board):
+    from huey.contrib.djhuey import HUEY
+
+    with override_settings(**PARK):
+        job = jobs.enqueue(jobs.LLM, "family_ideas", {"board": board.pk})
+        assert job.status == Job.Status.QUEUED
+        jobs.drain_queue(jobs.LLM)
+        task = HUEY.dequeue()
+        assert task is not None
+        HUEY.execute(task)
+        job.refresh_from_db()
+        assert job.status == Job.Status.DONE
+
+
+def test_huey_schedules_retry_on_failure(board, monkeypatch):
+    scheduled = []
+    monkeypatch.setattr(jobs.drain_queue, "schedule", lambda args, delay: scheduled.append((args, delay)))
+    monkeypatch.setattr("names.tasks.send_email", lambda job: (_ for _ in ()).throw(ConnectionError("down")))
+
+    with override_settings(**PARK):
+        job = jobs.enqueue(jobs.MAIL, "send_email", {"to": "a@example.com"})
+        jobs.drain(jobs.MAIL)
+        job.refresh_from_db()
+        assert job.status == Job.Status.QUEUED
+        assert job.attempts == 1
+        assert scheduled == [([jobs.MAIL], jobs.RETRY_SECONDS * 1)]
+

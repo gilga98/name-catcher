@@ -24,7 +24,7 @@ flowchart TB
 
   subgraph data["Data stores"]
     pg[("Postgres: boards, catalogue, consent, usage")]
-    redis[("Redis: sessions, cache, limits")]
+    redis[("Redis: sessions, cache, limits, Huey queue")]
   end
 
   subgraph external["Outside India"]
@@ -85,7 +85,7 @@ sequenceDiagram
 
 ## Background work
 
-Nothing talks to a third party while a person waits, except the Google sign-in callback, which has to finish before the page can load, and place of birth search, whose answer is what the person is waiting for. Jobs are rows in the database and run on thread pools inside each web process (`names/jobs.py`). Email, LLM and Soota have separate pools, so a slow LLM call can't delay a sign-in code.
+Nothing talks to a third party while a person waits, except the Google sign-in callback, which has to finish before the page can load, and place of birth search, whose answer is what the person is waiting for. Jobs are rows in the database and drained by Huey in a separate worker container using Redis (`names/jobs.py`). Retries use Huey's task scheduling, and `manage.py run_jobs` picks up anything stranded if a worker restarts.
 
 | Work | Person sees | Then |
 |---|---|---|

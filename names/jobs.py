@@ -1,20 +1,19 @@
 """Runs slow third-party work off the request path. A person never waits on an email server, an LLM or Soota.
 
-Jobs live in the database, so they survive restarts. Each web process drains them on small background thread
-pools, with no extra container to deploy. Each kind of work has its own pool, so a slow LLM call can't delay
-a sign-in code. `manage.py run_jobs` picks up anything stranded if a process dies with no traffic to follow.
+Jobs live in the database, so they survive restarts. A separate Huey worker container drains them from Redis queues.
+Each kind of work has its own queue, so a slow LLM call can't delay a sign-in code.
+`manage.py run_jobs` picks up anything stranded if a process dies with no traffic to follow.
 """
 
 import logging
-import threading
-from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from importlib import import_module
 
 from django.conf import settings
-from django.db import close_old_connections, transaction
+from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
+from huey.contrib.djhuey import db_task
 
 from .ai.base import AIError
 from .models import Board, Job
@@ -31,8 +30,10 @@ SOOTA_GIVES_UP_AFTER = timedelta(hours=1)
 RETRIES = {"send_email": 5, "read_birth_star": 2}
 RETRY_SECONDS = 30
 
-_pools = {queue: ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"jobs-{queue}") for queue in QUEUES}
-_waiting = {queue: threading.Semaphore(1) for queue in QUEUES}
+
+@db_task()
+def drain_queue(queue: str) -> None:
+    drain(queue)
 
 
 def enqueue(queue: str, kind: str, payload: dict, *, board: Board | None = None, dedupe: str = "") -> Job:
@@ -53,24 +54,7 @@ def kick(queue: str) -> None:
     if settings.JOBS_EAGER:
         drain(queue)
         return
-    transaction.on_commit(lambda: _schedule(queue))
-
-
-def _schedule(queue: str) -> None:
-    # One drain waiting to start is enough, however many requests kick it while the current one runs.
-    if _waiting[queue].acquire(blocking=False):
-        _pools[queue].submit(_drain_in_background, queue)
-
-
-def _drain_in_background(queue: str) -> None:
-    _waiting[queue].release()
-    close_old_connections()
-    try:
-        drain(queue)
-    except Exception:
-        logger.exception("Background jobs stopped unexpectedly")
-    finally:
-        close_old_connections()
+    transaction.on_commit(lambda: drain_queue(queue))
 
 
 def drain(queue: str) -> None:
@@ -122,9 +106,7 @@ def _handle_failure(job: Job, exc: Exception) -> None:
         job.run_after = timezone.now() + timedelta(seconds=RETRY_SECONDS * job.attempts)
         job.save(update_fields=["status", "run_after", "updated_at"])
         if not settings.JOBS_EAGER:
-            timer = threading.Timer(RETRY_SECONDS * job.attempts + 1, _schedule, [job.queue])
-            timer.daemon = True
-            timer.start()
+            drain_queue.schedule(args=[job.queue], delay=RETRY_SECONDS * job.attempts)
         return
     job.status = Job.Status.FAILED
     job.payload = {}

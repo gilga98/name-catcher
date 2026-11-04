@@ -26,7 +26,7 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 | `ALLOWED_HOSTS` | Yes | Your domain. `localhost` is only allowed with `DEBUG`, so a request sent straight to the server is refused. Health checks still work. |
 | `CSRF_TRUSTED_ORIGINS` | Yes | `https://` plus your domain. |
 | `DATABASE_URL` | Recommended | A Coolify Postgres URL. Otherwise SQLite at `/data`, which needs a persistent volume. |
-| `REDIS_URL` | Yes | Shared cache, session cache and rate-limit counters. Without it, each worker keeps its own and a restart clears them, so limits are far looser. |
+| `REDIS_URL` | Yes | Shared cache, session cache, rate-limit counters, and Huey task queue. |
 | `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` or `EMAIL_USE_SSL`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | Yes | SMTP for sign-up and password-reset codes. Nobody can finish signing up without it. |
 | `LEGAL_ENTITY_NAME`, `LEGAL_ADDRESS`, `LEGAL_JURISDICTION_CITY`, `GRIEVANCE_OFFICER_NAME`, `GRIEVANCE_EMAIL` | Yes | Published in the legal pages, which show a visible placeholder until set. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | No | Shows "Continue with Google". The redirect URI is `https://<domain>/accounts/google/login/callback/`. |
@@ -45,7 +45,7 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 | `SOOTA_API_URL`, `SOOTA_API_KEY` | No | `http://soota-engine-gateway:8000`, and the key for the `naamadeva` client (`python -m engine_gateway.keys naamadeva` in Soota's repo). Soota isn't public, so the gateway must run on the same Coolify server, on the `coolify` network. Parents see the birth star panel once the URL is set. Mark the key as a secret. |
 | `SOOTA_TIMEOUT_SECONDS`, `SOOTA_AYANAMSHA`, `SOOTA_NUMEROLOGY_SYSTEM`, `BIRTH_STAR_RATE`, `PLACE_SEARCH_RATE` | No | How long to wait for an answer, Soota's ayanamsha index (2 is Lahiri), `chaldean` or `pythagorean`, and readings and place searches per board. |
 
-Emails, every LLM call and Soota requests run off the request path, on background threads inside each web process (`names/jobs.py`), so there's no extra container. Schedule `python manage.py run_jobs` every few minutes to pick up anything stranded by a restart. Schedule `python manage.py purge_inactive` daily: the Privacy Policy promises it. Bump `POLICY_VERSION` in settings when the policies change, and everyone is asked to accept again.
+Emails, every LLM call and Soota requests run off the request path, queued to Redis and drained by Huey in a separate worker container (`python manage.py run_huey`). Retries use Huey's task scheduler. Schedule `python manage.py run_jobs` every few minutes to tidy finished jobs and pick up anything stranded by a restart. Schedule `python manage.py purge_inactive` daily: the Privacy Policy promises it. Bump `POLICY_VERSION` in settings when the policies change, and everyone is asked to accept again.
 
 Before launch, `python manage.py check --deploy` should list no `names.W` warnings. Also, outside this code: make the server reachable only through Cloudflare (a Tunnel, or a firewall allowing only Cloudflare's addresses), point a Zero Trust application at your `ADMIN_PATH`, and set a billing cap in Google Cloud.
 

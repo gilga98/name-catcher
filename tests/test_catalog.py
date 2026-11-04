@@ -316,3 +316,24 @@ def test_non_staff_cannot_reach_admin(client):
     response = client.get(reverse("admin:index"))
     assert response.status_code in (302, 403)
     assert client.get(reverse("admin:names_catalogname_upload")).status_code in (302, 403)
+
+
+def test_admin_login_uses_username_not_email(client):
+    get_user_model().objects.create_superuser("adminuser", "", "secret")
+    response = client.get(reverse("admin:index"))
+    assert response.status_code == 302
+    assert response.headers["Location"] == f"{reverse('admin:login')}?next={reverse('admin:index')}"
+
+    login_page = client.get(response.headers["Location"])
+    assert login_page.status_code == 200
+    assert b'name="username"' in login_page.content
+    assert b'name="login"' not in login_page.content
+
+    post_response = client.post(
+        response.headers["Location"],
+        {"username": "adminuser", "password": "secret"},
+        follow=False,
+    )
+    assert post_response.status_code == 302
+    assert post_response.headers["Location"] == reverse("admin:index")
+    assert client.get(reverse("admin:index")).status_code == 200

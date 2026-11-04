@@ -10,6 +10,7 @@ from django.utils import timezone
 from . import catalog, mail, services, soota
 from .ai.base import AIError
 from .dedup import phonetic_key
+from .jobs import drain_queue  # noqa: F401 - Huey worker autodiscovery
 from .models import AICall, Board, CatalogName, Job, Name
 
 MAX_ENRICH_ATTEMPTS = 3

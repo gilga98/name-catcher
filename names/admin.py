@@ -1,6 +1,5 @@
 """The operator's panel. Family boards are deliberately absent: staff run the service, they don't read private lists."""
 
-from allauth.account.decorators import secure_admin_login
 from allauth.mfa.utils import is_mfa_enabled
 from django.conf import settings
 from django.contrib import admin, messages
@@ -35,7 +34,7 @@ def _admin_login(request, extra_context=None):
     if settings.REQUIRE_ADMIN_MFA and user.is_authenticated and user.is_staff and not is_mfa_enabled(user):
         messages.info(request, "Set up two-factor sign-in to open the admin panel.")
         return redirect("mfa_index")
-    return secure_admin_login(_login)(request, extra_context)
+    return _login(request, extra_context)
 
 
 def overview() -> dict:

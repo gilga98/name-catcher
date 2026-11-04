@@ -14,3 +14,4 @@ django-allauth[socialaccount,mfa]
 django-redis
 httpx
 PyJWT[crypto]
+huey
