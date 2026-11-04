@@ -498,6 +498,47 @@ def test_configuring_access_opens_the_admin(access_keys):
     assert Client().get("/manage/", HTTP_CF_ACCESS_JWT_ASSERTION=access_token()).status_code == 302
 
 
+ANALYTICS = "static.cloudflareinsights.com"
+
+
+@pytest.mark.parametrize("path", ["/", "/legal/privacy", "/legal/cookies", "/legal/grievance"])
+def test_public_pages_allow_web_analytics(path):
+    assert ANALYTICS in Client().get(path).headers["Content-Security-Policy"]
+
+
+def test_pages_with_secrets_in_their_url_block_web_analytics():
+    user, client = parent()
+    board = services.create_board(user, {})
+    for visitor, url in (
+        (Client(), reverse("board", args=[board.guest_token])),
+        (client, reverse("board", args=[board.parent_token])),
+        (client, reverse("join", args=[board.invite_token])),
+        (client, reverse("dashboard")),
+        (client, reverse("account_settings")),
+        (client, reverse("accept_policies") + f"?next={reverse('board', args=[board.parent_token])}"),
+        (Client(), reverse("account_login")),
+        (Client(), reverse("account_signup")),
+    ):
+        response = visitor.get(url)
+        assert response.status_code == 200, url
+        assert ANALYTICS not in response.headers["Content-Security-Policy"], url
+
+
+def test_no_page_passes_its_path_on_as_a_referrer():
+    user, _ = parent()
+    board = services.create_board(user, {})
+    assert Client().get(reverse("board", args=[board.guest_token])).headers["Referrer-Policy"] == "strict-origin"
+
+
+def test_forms_still_pass_csrf_with_only_an_origin_to_go_on():
+    client = Client(enforce_csrf_checks=True)
+    page = client.get(reverse("account_login"))
+    token = page.cookies["csrftoken"].value
+    secure = {"secure": True, "HTTP_REFERER": "https://testserver/", "HTTP_ORIGIN": "https://testserver"}
+    response = client.post(reverse("account_login"), {"csrfmiddlewaretoken": token}, **secure)
+    assert response.status_code != 403
+
+
 def test_the_security_policy_only_allows_the_cdn_paths_we_use():
     policy = Client().get("/").headers["Content-Security-Policy"]
     assert "https://cdn.jsdelivr.net/gh/0builddotdev/0build@0.6.13/" in policy

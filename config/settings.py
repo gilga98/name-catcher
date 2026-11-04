@@ -172,7 +172,8 @@ SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=not DEBUG)
 # A day to begin with, because browsers can't be told to forget it. Raise to a year once HTTPS is proven.
 SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=0 if DEBUG else 86400)
-SECURE_REFERRER_POLICY = "same-origin"  # Share links are secrets: never leak them in Referer.
+# Share links are secrets: a Referer never holds a path, even between our own pages, where analytics could read it.
+SECURE_REFERRER_POLICY = "strict-origin"
 
 # Only the paths we use. jsDelivr serves anyone's code, so allowing the whole host lets injected HTML load any of it.
 CDN_KIT = "https://cdn.jsdelivr.net/gh/0builddotdev/0build@0.6.13/"
@@ -214,7 +215,7 @@ MAX_PENDING_CONTRIBUTIONS = env.int("MAX_PENDING_CONTRIBUTIONS", default=2000)
 ACCOUNT_RETENTION_DAYS = env.int("ACCOUNT_RETENTION_DAYS", default=730)
 
 # Published in the legal pages. Change POLICY_VERSION when the policies change: everyone accepts again.
-POLICY_VERSION = "2026-11-04.4"
+POLICY_VERSION = "2026-11-04.5"
 LEGAL_ENTITY_NAME = env("LEGAL_ENTITY_NAME", default="")
 LEGAL_ADDRESS = env("LEGAL_ADDRESS", default="")
 LEGAL_JURISDICTION_CITY = env("LEGAL_JURISDICTION_CITY", default="")

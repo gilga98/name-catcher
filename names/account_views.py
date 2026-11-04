@@ -11,11 +11,13 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from django_ratelimit.decorators import ratelimit
 
 from . import accounts, catalog
+from .analytics import allow_web_analytics
 from .forms import ContributeForm, DeleteAccountForm, ProfileForm
 from .models import CatalogName, ConsentRecord, Genre
 
 
 def legal_page(page: str):
+    @allow_web_analytics
     @require_GET
     def view(request: HttpRequest) -> HttpResponse:
         return render(request, f"names/legal/{page}.html")

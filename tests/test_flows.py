@@ -330,7 +330,7 @@ def test_ai_budget_blocks_a_flood_on_one_board(parent):
 def test_security_headers_are_set(parent):
     response = page(parent)
     assert "script-src" in response["Content-Security-Policy"]
-    assert response["Referrer-Policy"] == "same-origin"
+    assert response["Referrer-Policy"] == "strict-origin"
 
 
 def test_healthchecks():

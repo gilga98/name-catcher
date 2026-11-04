@@ -17,6 +17,7 @@ from django_ratelimit.exceptions import Ratelimited
 
 from . import accounts, catalog, services
 from .ai.base import AIError
+from .analytics import allow_web_analytics
 from .forms import GENDERS, STYLES, UNIQUENESS, AddNameForm, BriefForm
 from .jobs import LLM, kick
 from .models import Board, Job, Name
@@ -156,6 +157,7 @@ def _start_board(request: HttpRequest) -> HttpResponse:
     return redirect("board", token=board.parent_token)
 
 
+@allow_web_analytics
 @require_http_methods(["GET", "POST"])
 @ratelimit(group="create", key=_client_ip, rate=settings.BOARD_CREATE_RATE, method="POST", block=True)
 def home(request: HttpRequest) -> HttpResponse:
