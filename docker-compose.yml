@@ -17,14 +17,12 @@ services:
 
   worker:
     build: .
-    command: python manage.py run_huey
     restart: unless-stopped
-    healthcheck:
-      disable: true
     env_file:
       - path: .env
         required: false
     environment:
+      - CONTAINER_ROLE=worker
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - DATABASE_URL=${DATABASE_URL:-sqlite:////data/db.sqlite3}
     volumes:

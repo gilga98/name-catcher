@@ -12,5 +12,5 @@ RUN SECRET_KEY=build-only python manage.py collectstatic --noinput \
 USER app
 VOLUME /data
 EXPOSE 8000
-HEALTHCHECK CMD python -c "import urllib.request as u; u.urlopen('http://localhost:8000/healthz')"
-CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi --bind 0.0.0.0:8000 --workers ${WEB_CONCURRENCY:-2} --threads 4 --timeout 60 --graceful-timeout 30 --max-requests 1000 --max-requests-jitter 100 --worker-tmp-dir /dev/shm --access-logfile -"]
+HEALTHCHECK CMD if [ "$CONTAINER_ROLE" = "worker" ]; then exit 0; else python -c "import urllib.request as u; u.urlopen('http://localhost:8000/healthz')"; fi
+CMD ["sh", "-c", "if [ \"$CONTAINER_ROLE\" = 'worker' ]; then exec python manage.py run_huey; else python manage.py migrate --noinput && exec gunicorn config.wsgi --bind 0.0.0.0:8000 --workers ${WEB_CONCURRENCY:-2} --threads 4 --timeout 60 --graceful-timeout 30 --max-requests 1000 --max-requests-jitter 100 --worker-tmp-dir /dev/shm --access-logfile -; fi"]
