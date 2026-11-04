@@ -7,7 +7,7 @@
       <p class="hint">Pada {{ board.birth_star.pada }}, Moon in {{ board.birth_star.sign }}</p>
     </div>
   </div>
-  <ul class="sounds" aria-label="The star's sounds">{% for sound in board.birth_star.letters %}<li{% if sound == board.birth_star.letter %} class="is-own" aria-current="true"{% endif %}>{{ sound }}</li>{% endfor %}</ul>
+  <ul class="sounds" aria-label="The star's sounds">{% for sound in board.birth_star.letters %}<li{% if forloop.counter == board.birth_star.pada %} class="is-own" aria-current="true"{% endif %}>{{ sound }}</li>{% endfor %}</ul>
   {% if board.birth_star.birth_number %}
   <dl class="star-numbers">
     <div><dt>Birth number</dt><dd>{{ board.birth_star.birth_number }}</dd></div>

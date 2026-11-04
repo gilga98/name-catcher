@@ -308,6 +308,16 @@ def test_loopback_is_fine_for_local_work(api, url):
 
 
 @override_settings(**SOOTA_ON)
+def test_only_the_babys_own_sound_is_marked_even_when_a_star_repeats_one(client, board):
+    board.birth_star = {**STAR, "nakshatra": "Purva Ashadha", "pada": 2, "letter": "Dha"}
+    board.birth_star["letters"] = ["Bhu", "Dha", "Pha", "Dha"]
+    board.save()
+    content = client.get(reverse("board", args=[board.parent_token])).content.decode()
+    assert content.count('class="is-own"') == 1
+    assert '<li class="is-own" aria-current="true">Dha</li><li>Pha</li><li>Dha</li>' in content
+
+
+@override_settings(**SOOTA_ON)
 def test_saving_the_brief_keeps_the_star(client, board):
     board.birth_star = STAR
     board.save()
