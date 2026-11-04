@@ -93,9 +93,19 @@ Nothing talks to a third party while a person waits, except the Google sign-in c
 | Tags and meaning for a name | The card at once, with details filling in | Polls every 2 seconds |
 | "Ask AI" | Keeps swiping | Cards join the deck when ready |
 | Family ideas | Catalogue ideas at once | LLM ideas join them |
-| Natural voice | Device voice is instant; this shows "Preparing…" | Plays when ready |
-| Name number | "Working out its number…" on the card | Polls every 2 seconds. The row is deleted on success |
+| Natural voice | Plays at once if it's been recorded. Otherwise "Preparing…", and the device voice is instant | Plays when ready |
+| Name number | Usually there already. Otherwise "Working out its number…" on the card | Polls every 2 seconds. The row is deleted on success |
 | Birth star | "Working out the birth star…" | Polls every 2 seconds, then reloads the page. The row is deleted on success |
+
+### When a name arrives
+
+`services.prepare_names` runs for every name reaching a board, however it got there. It asks for its details, its recording and its number straight away, so the card already has them when someone looks. The LLM worker takes its work in this order, and goes back to the top after each step:
+
+1. Jobs a person is waiting on, such as "Ask AI" or a tap on a voice not recorded yet.
+2. Batches of names waiting for details.
+3. One recording, once that name has its details, because the native spelling is what gets spoken.
+
+Recordings are shared by every family, so each name is recorded once. They're paced, capped per day, and stop for a while if Gemini asks. Names on a board go first. Up to half the daily budget then goes on the rest of the approved catalogue, most picked first. A board with AI switched off asks for no recordings. These calls aren't charged to any family. `run_jobs` restarts the queue after a pause.
 
 ## How a birth star works
 

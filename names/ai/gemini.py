@@ -10,7 +10,7 @@ from google import genai
 from google.genai import errors, types
 from pydantic import BaseModel
 
-from .base import AIError, DescribedIdea, NameIdea, SuggestionRequest
+from .base import AIError, AIRateLimited, DescribedIdea, NameIdea, SuggestionRequest
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,9 @@ class GeminiAI:
             return self._client.models.generate_content(model=model, contents=contents, config=config)
         except errors.APIError as exc:
             logger.warning("Gemini call failed: %s %s", type(exc).__name__, exc.code)
-            raise AIError(QUOTA_REACHED if exc.code == RATE_LIMITED else UNAVAILABLE) from exc
+            if exc.code == RATE_LIMITED:
+                raise AIRateLimited(QUOTA_REACHED) from exc
+            raise AIError(UNAVAILABLE) from exc
         except httpx.HTTPError as exc:
             logger.warning("Gemini call failed: %s", type(exc).__name__)
             raise AIError(UNAVAILABLE) from exc

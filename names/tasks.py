@@ -1,20 +1,26 @@
 """The work jobs.py runs in the background. Nothing here runs while a person is waiting on a page."""
 
+import logging
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from . import catalog, mail, services, soota
-from .ai.base import AIError
+from . import catalog, jobs, mail, services, soota
+from .ai.base import AIError, AIRateLimited
 from .dedup import phonetic_key
 from .jobs import drain_queue  # noqa: F401 - Huey worker autodiscovery
 from .models import AICall, Board, CatalogName, Job, Name
 
+logger = logging.getLogger(__name__)
+
 MAX_ENRICH_ATTEMPTS = 3
 ENRICH_LEASE = timedelta(minutes=3)
+MAX_VOICE_ATTEMPTS = 3
+VOICE_PAUSED, VOICE_SPACED = "voice-paused", "voice-spaced"
 
 
 def send_email(job: Job) -> None:
@@ -46,7 +52,7 @@ def read_name_numbers(job: Job) -> None:
 
 def _waiting():
     lost = Q(enrich_state=CatalogName.Enrich.RUNNING, enrich_claimed_at__lt=timezone.now() - ENRICH_LEASE)
-    return CatalogName.objects.filter(Q(enrich_state=CatalogName.Enrich.PENDING) | lost)
+    return CatalogName.objects.filter(Q(enrich_state=CatalogName.Enrich.PENDING) | lost).defer("audio")
 
 
 def _over_budget() -> bool:
@@ -112,4 +118,62 @@ def enrich_batch() -> bool:
         else:
             services.fill_boards(catalog.apply_idea(entry, idea))
     _give_back(missing)
+    return True
+
+
+def _next_voice() -> CatalogName | None:
+    """Names on a board come first. Half the budget at most goes on the catalogue, most picked first, so that a name
+    someone adds in the evening doesn't have to wait for tomorrow."""
+    day = timezone.now() - timedelta(days=1)
+    spent = AICall.objects.filter(user=None, kind=AICall.Kind.SPEAK, created_at__gte=day).count()
+    if spent >= settings.AI_VOICE_PER_DAY:
+        return None
+    # A name still being described may be about to get its native spelling, which is what should be spoken.
+    ready = CatalogName.objects.filter(audio__isnull=True).defer("audio").exclude(
+        enrich_state__in=[CatalogName.Enrich.PENDING, CatalogName.Enrich.RUNNING]
+    )
+    lost = Q(voice_state=CatalogName.Enrich.RUNNING, voice_claimed_at__lt=timezone.now() - ENRICH_LEASE)
+    waiting = ready.filter(Q(voice_state=CatalogName.Enrich.PENDING) | lost).exclude(status=CatalogName.Status.REJECTED)
+    entry = waiting.order_by("pk").first()
+    if entry or spent >= settings.AI_VOICE_PER_DAY // 2:
+        return entry
+    spare = ready.filter(status=CatalogName.Status.APPROVED, voice_state=CatalogName.Enrich.NONE)
+    return spare.order_by("-picks", "pk").first()
+
+
+def _voice_failed(entry: CatalogName) -> None:
+    entry.voice_attempts += 1
+    give_up = entry.voice_attempts >= MAX_VOICE_ATTEMPTS
+    entry.voice_state = CatalogName.Enrich.FAILED if give_up else CatalogName.Enrich.PENDING
+    entry.save(update_fields=["voice_attempts", "voice_state"])
+
+
+def record_next_voice() -> bool:
+    """Runs only when nobody is waiting on the LLM queue. False means leave it for now: a later wake carries on."""
+    spacing = settings.AI_VOICE_SPACING_SECONDS
+    if cache.get(VOICE_PAUSED):
+        return False
+    entry = _next_voice()
+    if entry is None or (spacing and not cache.add(VOICE_SPACED, 1, spacing)):
+        return False
+    now = timezone.now()
+    won = CatalogName.objects.filter(pk=entry.pk, voice_state=entry.voice_state).update(
+        voice_state=CatalogName.Enrich.RUNNING, voice_claimed_at=now
+    )
+    if not won:
+        return True
+    AICall.objects.create(user=None, kind=AICall.Kind.SPEAK)
+    try:
+        services.record_catalog_voice(entry)
+    except AIRateLimited:
+        logger.warning("Pausing voice recordings: rate limited")
+        CatalogName.objects.filter(pk=entry.pk).update(voice_state=CatalogName.Enrich.PENDING)
+        cache.set(VOICE_PAUSED, 1, settings.AI_VOICE_PAUSE_SECONDS)
+        return False  # `run_jobs` carries on once the pause has passed.
+    except Exception as exc:  # noqa: BLE001 - One bad name must never stop the queue.
+        logger.warning("Voice recording failed: %s", type(exc).__name__)
+        _voice_failed(entry)
+    if spacing:
+        jobs.kick_after(jobs.LLM, spacing)
+        return False
     return True

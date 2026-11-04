@@ -85,6 +85,11 @@ def nudge(queue: str) -> None:
         kick(queue)
 
 
+def kick_after(queue: str, seconds: int) -> None:
+    if not settings.JOBS_EAGER:
+        _wake(queue, delay=seconds)
+
+
 def _wake(queue: str, delay: int | None = None) -> None:
     """The job is safe in the database, and `run_jobs` finds it once Redis is back, so an outage never fails a page."""
     try:
@@ -98,7 +103,8 @@ def _wake(queue: str, delay: int | None = None) -> None:
 
 def drain(queue: str) -> None:
     tasks = import_module("names.tasks")
-    while _run_next(queue, tasks) or (queue == LLM and tasks.enrich_batch()):
+    # People waiting come first, then details for cards, then recordings nobody has asked for yet.
+    while _run_next(queue, tasks) or (queue == LLM and (tasks.enrich_batch() or tasks.record_next_voice())):
         pass
 
 

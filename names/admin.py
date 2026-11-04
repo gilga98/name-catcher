@@ -33,6 +33,8 @@ def overview() -> dict:
         .values("kind")
         .annotate(total=Count("pk"), names=Sum("units")),
         "insights_cached": CatalogName.objects.filter(enrich_state=CatalogName.Enrich.DONE).count(),
+        "voices_ready": CatalogName.objects.filter(audio__isnull=False).count(),
+        "voices_waiting": CatalogName.objects.filter(voice_state=CatalogName.Enrich.PENDING).count(),
         "aliases": NameAlias.objects.count(),
         "jobs_waiting": Job.objects.filter(status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).count(),
         "jobs_failed": Job.objects.filter(status=Job.Status.FAILED).count(),
@@ -87,10 +89,15 @@ class CatalogNameAdmin(admin.ModelAdmin):
     list_filter = ["status", "source", "rarity", "gender", "origin", "genres"]
     search_fields = ["text", "native", "meaning", "key"]
     filter_horizontal = ["genres"]
-    readonly_fields = ["key", "source", "submitted_by", "submissions", "picks", "updated_at", "enrich_state"]
-    exclude = ["enrich_attempts", "enrich_claimed_at"]
+    readonly_fields = [
+        "key", "source", "submitted_by", "submissions", "picks", "updated_at", "enrich_state", "voice_state",
+    ]  # fmt: skip
+    exclude = ["enrich_attempts", "enrich_claimed_at", "voice_attempts", "voice_claimed_at"]
     actions = ["approve", "reject"]
     ordering = ["-submissions", "text"]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).defer("audio")
 
     @admin.action(description="Approve selected names")
     def approve(self, request, queryset) -> None:

@@ -13,6 +13,10 @@ class AIError(Exception):
     """The AI backend could not answer. Safe to show `str(error)` to the user."""
 
 
+class AIRateLimited(AIError):
+    """The backend asked us to slow down, so the same request is worth trying again later."""
+
+
 class NameIdea(BaseModel):
     name: str
     native_script: str

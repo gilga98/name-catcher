@@ -18,6 +18,8 @@ EMAIL_DELIVERY_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 JOBS_EAGER = True
 LLM_HUEY = MemoryHuey("name_catcher_llm", immediate=False)
 AI_ENRICH_BATCH_WINDOW_SECONDS = 0
+AI_VOICE_PER_DAY = 0  # Off, except in the tests about it.
+AI_VOICE_SPACING_SECONDS = 0
 HUEY = {
     "huey_class": "huey.MemoryHuey",
     "name": "name_catcher",

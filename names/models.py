@@ -201,6 +201,9 @@ class CatalogName(models.Model):
     supporters = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="+")
     picks = models.PositiveIntegerField(default=0)  # How often it reached a board. High means overused.
     audio = models.BinaryField(null=True, editable=False)
+    voice_state = models.CharField(max_length=10, choices=Enrich, default=Enrich.NONE, db_index=True)
+    voice_attempts = models.PositiveSmallIntegerField(default=0)
+    voice_claimed_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -248,6 +248,10 @@ SOOTA_AYANAMSHA = env.int("SOOTA_AYANAMSHA", default=2)  # Lahiri, Soota's own d
 SOOTA_NUMEROLOGY_SYSTEM = env("SOOTA_NUMEROLOGY_SYSTEM", default="chaldean")  # Or pythagorean.
 
 JOBS_EAGER = False  # Tests run background work inline.
+# Recording names ahead of anyone tapping. Gemini's free tier allows few of these a day, so taps need some left over.
+AI_VOICE_PER_DAY = env.int("AI_VOICE_PER_DAY", default=60)
+AI_VOICE_SPACING_SECONDS = env.int("AI_VOICE_SPACING_SECONDS", default=20)
+AI_VOICE_PAUSE_SECONDS = env.int("AI_VOICE_PAUSE_SECONDS", default=3600)
 AI_ENRICH_BATCH_SIZE = env.int("AI_ENRICH_BATCH_SIZE", default=10)
 AI_ENRICH_BATCH_WINDOW_SECONDS = env.float("AI_ENRICH_BATCH_WINDOW_SECONDS", default=1.0)
 AI_ENRICH_NAMES_PER_HOUR = env.int("AI_ENRICH_NAMES_PER_HOUR", default=2000)

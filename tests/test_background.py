@@ -1,7 +1,9 @@
 import threading
+from importlib import import_module
 from types import SimpleNamespace
 
 import pytest
+from django.apps import apps
 from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -12,9 +14,9 @@ from django.urls import reverse
 from huey.contrib.djhuey import HUEY
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from names import catalog, jobs, services
-from names.accounts import record_consent
-from names.ai.base import AIError, DescribedIdea
+from names import catalog, jobs, services, tasks
+from names.accounts import profile_of, record_consent
+from names.ai.base import AIError, AIRateLimited, DescribedIdea
 from names.mail import QueuedEmailBackend
 from names.models import AICall, Board, CatalogName, Job, Name, NameAlias, Vote
 
@@ -375,6 +377,182 @@ def test_a_failed_voice_stops_instead_of_retrying_on_every_poll(board, client, m
     assert client.get(url).status_code == 502
     assert client.get(url).status_code == 502
     assert Job.objects.filter(kind="speak").count() == 1
+
+
+# Recording voices before anyone taps
+
+VOICES = {"AI_VOICE_PER_DAY": 10}
+
+
+class Voice(Counting):
+    def __init__(self):
+        super().__init__()
+        self.spoken = []
+
+    def speak(self, text):
+        self.spoken.append(text)
+        return b"RIFF"
+
+
+@pytest.fixture
+def voice(monkeypatch):
+    fake = Voice()
+    monkeypatch.setattr(services, "get_ai", lambda: fake)
+    return fake
+
+
+def listed(text, **fields):
+    key = catalog.canonical_key(text)
+    return CatalogName.objects.create(key=key, text=text, status="approved", meaning="m", **fields)
+
+
+@override_settings(**VOICES)
+def test_a_new_name_is_recorded_before_anyone_taps(board, client, voice):
+    client.force_login(board.members.first())
+    name = add(board, "Zubin")
+    assert voice.spoken == ["Zubin"]
+    calls = AICall.objects.filter(kind="speak")
+    assert calls.count() == 1 and calls.first().user is None
+    response = client.get(reverse("audio", args=[board.parent_token, name.pk]))
+    assert response.status_code == 200 and response.content == b"RIFF"
+    assert voice.spoken == ["Zubin"]
+    assert AICall.objects.filter(kind="speak").count() == 1
+
+
+@override_settings(**VOICES)
+def test_a_name_picked_from_the_catalogue_is_recorded_too(board, voice):
+    entry = listed("Zubin")
+    services.add_from_catalog(board, [entry.pk])
+    entry.refresh_from_db()
+    assert bytes(entry.audio) == b"RIFF" and entry.voice_state == "done"
+
+
+@override_settings(**VOICES)
+def test_a_board_with_ai_switched_off_records_nothing(board, voice):
+    profile = profile_of(board.members.first())
+    profile.ai_enabled = False
+    profile.save()
+    add(board, "Zubin")
+    assert voice.spoken == []
+
+
+@override_settings(**VOICES | PARK)
+def test_a_name_is_spoken_only_once_its_details_are_in(board, voice):
+    add(board, "Zubin")
+    entry = CatalogName.objects.get(key=catalog.canonical_key("Zubin"))
+    assert entry.enrich_state == "pending" and entry.voice_state == "pending"
+    assert tasks.record_next_voice() is False
+    jobs.drain(jobs.LLM)
+    entry.refresh_from_db()
+    assert voice.batches == [["Zubin"]] and voice.spoken == ["Zubin"] and entry.voice_state == "done"
+
+
+@override_settings(**VOICES | PARK)
+def test_someone_waiting_goes_ahead_of_recordings(board, voice):
+    queued = listed("Zubin")
+    CatalogName.objects.filter(pk=queued.pk).update(voice_state="pending")
+    order = []
+    voice.suggest = lambda request: order.append("suggest") or []
+    voice.speak = lambda text: order.append("speak") or b"RIFF"
+    jobs.enqueue(jobs.LLM, "suggest", {"board": board.pk}, board=board)
+    jobs.drain(jobs.LLM)
+    assert order == ["suggest", "speak"]
+
+
+@override_settings(**VOICES | PARK)
+def test_names_on_boards_go_before_the_rest_of_the_catalogue(voice):
+    popular = listed("Zubin", picks=50)
+    wanted = listed("Tarun", voice_state="pending")
+    assert tasks._next_voice().pk == wanted.pk
+    CatalogName.objects.filter(pk=wanted.pk).update(voice_state="done")
+    assert tasks._next_voice().pk == popular.pk
+
+
+@override_settings(AI_VOICE_PER_DAY=2, **PARK)
+def test_the_catalogue_gets_half_the_budget_and_boards_the_rest(voice):
+    listed("Zubin")
+    AICall.objects.create(user=None, kind="speak")
+    assert tasks._next_voice() is None
+    wanted = listed("Tarun", voice_state="pending")
+    assert tasks._next_voice().pk == wanted.pk
+    AICall.objects.create(user=None, kind="speak")
+    assert tasks._next_voice() is None
+
+
+@override_settings(**VOICES | PARK)
+def test_a_rate_limit_pauses_recordings_without_giving_up_on_the_name(voice):
+    entry = listed("Zubin", voice_state="pending")
+    listed("Tarun", voice_state="pending")
+
+    def limited(text):
+        voice.spoken.append(text)
+        raise AIRateLimited("Slow down.")
+
+    voice.speak = limited
+    jobs.drain(jobs.LLM)
+    entry.refresh_from_db()
+    assert voice.spoken == ["Zubin"]
+    assert entry.voice_state == "pending" and entry.voice_attempts == 0
+
+
+@override_settings(**VOICES | PARK)
+def test_a_name_that_keeps_failing_stops_being_tried_and_the_queue_moves_on(voice):
+    entry = listed("Zubin", voice_state="pending")
+    next_one = listed("Tarun", voice_state="pending")
+
+    def broken(text):
+        if text == "Zubin":
+            raise AIError("Voice is down.")
+        return b"RIFF"
+
+    voice.speak = broken
+    jobs.drain(jobs.LLM)
+    entry.refresh_from_db()
+    next_one.refresh_from_db()
+    assert entry.voice_state == "failed" and entry.voice_attempts == tasks.MAX_VOICE_ATTEMPTS
+    assert next_one.voice_state == "done"
+
+
+@override_settings(AI_VOICE_SPACING_SECONDS=20, **VOICES | PARK)
+def test_recordings_are_spaced_out_and_a_later_wake_continues(voice):
+    listed("Zubin", voice_state="pending")
+    listed("Tarun", voice_state="pending")
+    jobs.drain(jobs.LLM)
+    assert voice.spoken == ["Zubin"]
+    assert len([task for task in LLM_HUEY.pending() if task.eta]) == 1
+    jobs.drain(jobs.LLM)
+    assert voice.spoken == ["Zubin"]
+    cache.delete(tasks.VOICE_SPACED)
+    jobs.drain(jobs.LLM)
+    assert voice.spoken == ["Zubin", "Tarun"]
+
+
+def test_names_already_on_boards_are_queued_when_the_pipeline_arrives(board):
+    migration = import_module("names.migrations.0011_add_catalog_voice_state")
+    switched_off = Board.objects.create()
+    owner = get_user_model().objects.create_user("off", "off@example.com", "pw")
+    switched_off.members.add(owner)
+    profile = profile_of(owner)
+    profile.ai_enabled = False
+    profile.save()
+    for text, on_board, status in (
+        ("Zubin", board, Name.Status.KEPT),
+        ("Tarun", switched_off, Name.Status.KEPT),
+        ("Ishan", board, Name.Status.PASSED),
+    ):
+        Name.objects.create(board=on_board, text=text, key=text.lower(), status=status)
+        CatalogName.objects.create(key=text.lower(), text=text, status="approved")
+    CatalogName.objects.create(key="spare", text="Spare", status="approved")
+    migration.queue_names_on_boards(apps, None)
+    pending = CatalogName.objects.filter(voice_state="pending")
+    assert list(pending.values_list("key", flat=True)) == ["zubin"]
+
+
+def test_lists_of_names_leave_recordings_behind():
+    entry = listed("Zubin")
+    CatalogName.objects.filter(pk=entry.pk).update(audio=b"RIFF")
+    assert "audio" in catalog.pick([entry.pk])[0].get_deferred_fields()
+    assert "audio" in catalog.lookup(entry.key).get_deferred_fields()
 
 
 # Email

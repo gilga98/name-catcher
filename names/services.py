@@ -192,6 +192,7 @@ def add_from_catalog(board: Board, ids: list[int]) -> list[Name]:
     names = Name.objects.bulk_create(_fresh([_from_catalog(board, entry) for entry in entries], board))
     kept = {name.key for name in names}
     catalog.record_picks(entry for entry in entries if entry.key in kept)
+    prepare_names(board, names)
     return names
 
 
@@ -232,7 +233,9 @@ def suggest_names(board: Board, more_like: str = "") -> list[Name]:
     """The last resort: the browser found too little in the catalogue, so this one costs money."""
     ideas = _ask_llm(_suggestion_request(board, more_like))
     candidates = [_build_name(board, idea, source=Name.Source.LLM) for idea in ideas]
-    return Name.objects.bulk_create(_fresh(candidates, board))
+    names = Name.objects.bulk_create(_fresh(candidates, board))
+    prepare_names(board, names)
+    return names
 
 
 def start_suggesting(board: Board, more_like: str = "") -> Job:
@@ -311,7 +314,7 @@ def add_name(board: Board, text: str, voter: Voter, *, force: bool = False) -> A
     )
     if voter.is_parent:
         keep(name, voter)
-    describe_name(name)
+    prepare_names(name.board, [name])
     return AddResult(name=name)
 
 
@@ -352,11 +355,24 @@ def describe_name(name: Name) -> str:
     return Details.UNAVAILABLE
 
 
+def prepare_names(board: Board, names: list[Name]) -> None:
+    """Starts every third-party call a card could need as soon as a name arrives, so nobody waits on one later."""
+    for name in names:
+        describe_name(name)
+    if accounts.ai_allowed(board):
+        catalog.request_voices([name.key for name in names])
+    for name in names:
+        if request_name_number(name):
+            break  # One request covers every name waiting on the board.
+
+
 def fill_boards(entry: CatalogName) -> None:
     """One LLM answer reaches every family waiting on that name."""
-    waiting = Name.objects.filter(key=entry.key, respelling="").select_related("board").defer("audio")
+    waiting = list(Name.objects.filter(key=entry.key, respelling="").select_related("board").defer("audio"))
     for name in waiting:
         _copy_details(name, entry)
+    if waiting:
+        catalog.request_voices([entry.key])  # Spelling merges can move a name to this entry after it was first asked.
 
 
 def merge_into(name: Name, text: str, voter: Voter) -> bool:
@@ -526,7 +542,7 @@ def start_speaking(name: Name) -> Job:
     return enqueue(LLM, "speak", {"name": name.pk}, board=name.board, dedupe=f"speak:{name.key}")
 
 
-def _speech_text(name: Name) -> str:
+def _speech_text(name: Name | CatalogName) -> str:
     """The recording is shared by everyone with this key, so what's spoken has to sound like that key."""
     for text in (name.native, name.text):
         if text and (catalog.canonical_key(text) == name.key or same_name(text, name.key)):
@@ -535,11 +551,19 @@ def _speech_text(name: Name) -> str:
 
 
 def record_audio(name: Name) -> None:
+    if cached_audio(name) is not None:  # The pipeline got there while this job was waiting.
+        return
     audio = get_ai().speak(_speech_text(name))
     CatalogName.objects.get_or_create(key=name.key, defaults={"text": name.text, "source": CatalogName.Source.LLM})
-    CatalogName.objects.filter(key=name.key).update(audio=audio)
+    CatalogName.objects.filter(key=name.key).update(audio=audio, voice_state=CatalogName.Enrich.DONE)
     name.audio = audio
     name.save(update_fields=["audio"])
+
+
+def record_catalog_voice(entry: CatalogName) -> None:
+    """Boards pick this up through cached_audio the first time someone taps."""
+    audio = get_ai().speak(_speech_text(entry))
+    CatalogName.objects.filter(pk=entry.pk).update(audio=audio, voice_state=CatalogName.Enrich.DONE)
 
 
 def shortlist(board: Board, voter: Voter) -> list[Name]:
