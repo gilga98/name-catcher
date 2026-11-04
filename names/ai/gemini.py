@@ -38,6 +38,7 @@ surname_fit: at most 10 words on how it sounds with brief.surname. Empty if ther
 SUGGEST = f"""You suggest Indian baby names. {DATA_ONLY}
 Our catalogue has run out of matches, so skip obvious answers. Return up to 8 names, and fewer rather than pad.
 brief.origins, gender, style and starts_with are hard limits.
+brief.birth_sounds are the first sounds the family's tradition favours. Prefer names that start with one.
 brief.notes is the parents' own description of what the name should mean. Reflect its feeling. Never quote it.
 brief.uniqueness: "familiar" allows well-known names. "uncommon" and "rare" exclude them.
 Unique means real but uncommon: classical and regional literature, mythology, nature words, regional languages.

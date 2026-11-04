@@ -40,3 +40,9 @@
     <p class="hint">Family never sees this, and it isn't sent to AI.</p>
   </div>
 </div>
+{% if form.numerology_available %}
+<div class="field">
+  <span class="z-form-label">Numerology</span>
+  <label class="check-row">{{ form.numerology }} <span>Show each name's number. It's worked out from the spelling alone, so only the name is sent to our calculation service.</span></label>
+</div>
+{% endif %}

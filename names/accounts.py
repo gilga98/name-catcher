@@ -21,8 +21,10 @@ def profile_of(user: AbstractBaseUser) -> Profile:
     return Profile.objects.get_or_create(user=user)[0]
 
 
-def record_consent(user: AbstractBaseUser, purpose: str = ConsentRecord.Purpose.TERMS) -> None:
-    ConsentRecord.objects.create(user=user, purpose=purpose, policy_version=settings.POLICY_VERSION)
+def record_consent(
+    user: AbstractBaseUser, purpose: str = ConsentRecord.Purpose.TERMS, action: str = ConsentRecord.Action.GIVEN
+) -> None:
+    ConsentRecord.objects.create(user=user, purpose=purpose, action=action, policy_version=settings.POLICY_VERSION)
 
 
 def has_current_consent(user: AbstractBaseUser) -> bool:
@@ -71,6 +73,7 @@ def export_data(user: AbstractBaseUser) -> dict:
 def _board_export(board: Board) -> dict:
     return {
         "brief": board.brief,
+        "birth_star": board.birth_star,
         "created_at": board.created_at,
         "names": [
             {

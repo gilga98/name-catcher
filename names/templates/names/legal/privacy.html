@@ -11,6 +11,7 @@
     <tr><td>Email address and password (stored as a one-way hash), or your Google account's email and ID</td><td>To create your account, sign you in and send security codes</td></tr>
     <tr><td>Your display name and settings</td><td>To show who voted, and to follow your choices</td></tr>
     <tr><td>Your brief: your baby's nickname and chosen picture, family name, gender preference, roots, your description of what the name should mean, style, starting letters, and names to avoid</td><td>To suggest names that suit you</td></tr>
+    <tr><td>Only if you add a birth star: your baby's date and time of birth and nearest city, and then the star, pada, Moon sign, naming sounds, and birth and destiny numbers worked out from them</td><td>To favour names with the sounds your tradition suggests. We keep the result, and delete the date, time and city once it's worked out</td></tr>
     <tr><td>Names on your board, with your swipes, ranking and votes</td><td>To run your board and improve your suggestions</td></tr>
     <tr><td>Family members using a family link: the name they type, their votes and suggestions</td><td>To show the parents who suggested what</td></tr>
     <tr><td>Names you contribute, and your confirmation that you may share them</td><td>To review them and add them to our shared catalogue</td></tr>
@@ -18,7 +19,7 @@
     <tr><td>Technical logs such as IP address, browser and time of request</td><td>To secure the service, limit abuse and investigate incidents</td></tr>
   </tbody>
 </table>
-<p>We ask for your consent to these uses when you sign up. We don't sell your data, show advertising or use your data for marketing. We don't ask for your child's date of birth, or for religion, caste or health details. Please don't type them into free-text fields.</p>
+<p>We ask for your consent to these uses when you sign up, and separately before you add a birth star. We don't sell your data, show advertising or use your data for marketing. We don't ask for religion, caste or health details. Please don't type them into free-text fields.</p>
 
 <h2>What happens on your device</h2>
 <p>Your browser ranks names from our catalogue itself, using your preferences and past choices. Your device's own voice can read names aloud. Your device vendor's speech service may handle that, under its own terms. If you add your own baby photo, it stays in that browser and we never receive it. Use "Remove photo" to delete it from the device.</p>
@@ -29,15 +30,16 @@
   <li>your preferences (gender, roots, style, starting letters, how unusual a name should be);</li>
   <li>your description of what the name should mean, after removing email addresses, web links and long numbers;</li>
   <li>names on your board, including those you kept or passed and those family suggested, without saying who chose them. Requests to describe a name carry only the name, and may be grouped with names from other families;</li>
-  <li>your family name, only if you tick the box to share it.</li>
+  <li>your family name, only if you tick the box to share it;</li>
+  <li>the naming sounds of your baby's birth star, if you added one, when AI looks for names for you.</li>
 </ul>
-<p>We do not send your email, account details, your baby's nickname or photo, names of the people who voted or suggested, or your "names to avoid". Please leave health details, addresses and phone numbers out of your description. You can switch AI off in Settings. Names and general facts that AI returns may be kept without any link to you, reviewed by our team, and shown to other families. Your description and family name are not added to that catalogue.</p>
+<p>We do not send your email, account details, your baby's nickname, photo or birth details, the name of the birth star, names of the people who voted or suggested, or your "names to avoid". Please leave health details, addresses and phone numbers out of your description. You can switch AI off in Settings. Names and general facts that AI returns may be kept without any link to you, reviewed by our team, and shown to other families. Your description and family name are not added to that catalogue.</p>
 
 <h2>What your partner sees</h2>
-<p>Parents on a board share it. Each can see the other's display name and which names the other kept or passed on.</p>
+<p>Parents on a board share it. Each can see the other's display name, which names the other kept or passed on, and any birth star either has added.</p>
 
 <h2>What family members see</h2>
-<p>Anyone with your family link sees your baby's nickname and picture, your family name, your general preferences and the names on your shortlist that neither parent passed on. They also see your description, if you ticked the box to share it. They never see "names to avoid", and never see which names you passed on.</p>
+<p>Anyone with your family link sees your baby's nickname and picture, your family name, your general preferences and the names on your shortlist that neither parent passed on. They also see your description, if you ticked the box to share it. They never see "names to avoid" or the birth star, and never see which names you passed on.</p>
 
 <h2>Who else handles your data</h2>
 <p>These providers act for us, under contract, and only for the purposes above:</p>
@@ -46,6 +48,7 @@
   <li>Google LLC, for sign-in with Google if you choose it, and for the Gemini API. Google may process this data outside India.</li>
   <li>Cloudflare, Inc., which protects this site from attacks and checks that people signing up aren't bots. It sees your IP address and browser details, and may process them outside India. On our home page and these policy pages, its Web Analytics also counts visits and measures page speed, without cookies. It doesn't run on boards, family links or your account pages.</li>
   <li>Our email delivery provider, for sign-in and security messages. We hold each message in our own queue only until it's sent.</li>
+  <li>Soota, our calculation service, which works out the birth star if you add one. It runs on our own private network and can't be reached from the internet. It receives the date, time and nearest city, and no name or account details. We hold them in our own queue only until it answers, and for an hour at most. If you turn on numerology, it also receives the names on your board, on their own, to work out their numbers.</li>
   <li>jsDelivr, a content delivery network, which supplies some page styles and fonts and receives your IP address when it does.</li>
 </ul>
 <p>We may transfer personal data outside India, except to any country restricted by the Central Government under section 16 of the DPDP Act. We may also disclose data where the law requires it.</p>
@@ -62,14 +65,14 @@
 <ul>
   <li><strong>Access:</strong> get a summary of your data and of what we've shared. <a href="{% url 'account_export' %}">Download your data</a> at any time.</li>
   <li><strong>Correction and erasure:</strong> edit your details in Settings, or delete boards and your account yourself.</li>
-  <li><strong>Withdraw consent:</strong> as easily as you gave it, by <a href="{% url 'account_settings' %}">deleting your account</a> in Settings. Switching off AI withdraws that use alone. Withdrawal doesn't affect anything done before it.</li>
+  <li><strong>Withdraw consent:</strong> as easily as you gave it, by <a href="{% url 'account_settings' %}">deleting your account</a> in Settings. Switching off AI withdraws that use alone. "Remove birth star" on your board withdraws that use, and deletes the result. Withdrawal doesn't affect anything done before it.</li>
   <li><strong>Nominate:</strong> name someone to exercise your rights if you die or become incapacitated, by writing to us.</li>
   <li><strong>Complain:</strong> write to our <a href="{% url 'grievance' %}">Grievance Officer</a>. If you're not satisfied with the answer, you may complain to the Data Protection Board of India.</li>
 </ul>
 <p>Family members without an account can use these rights by writing to {{ legal.email }}. Please include the board's family link so we can find your entries.</p>
 
 <h2>Children</h2>
-<p>This service is for adults only. Anyone under 18 must not create an account or use a family link. Names are chosen for a child, but we don't need personal data about that child. A nickname is optional, and we don't ask for a birth date or accept uploaded photos. We don't track or profile children, or target advertising at them.</p>
+<p>This service is for adults only. Anyone under 18 must not create an account or use a family link. Names are chosen for a child, but we need very little personal data about that child. A nickname is optional, birth details are optional and are entered by a parent, and we don't accept uploaded photos. We don't track or profile children, or target advertising at them.</p>
 
 <h2>Security and breaches</h2>
 <p>We use encrypted connections, hashed passwords, access controls and logging. If a personal data breach affects you, we will tell you and the Data Protection Board of India, as the DPDP Act and its Rules require.</p>

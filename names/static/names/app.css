@@ -222,6 +222,9 @@ h1, h2, h3, .name { font-family: var(--serif); font-weight: 400; color: var(--in
 .brief summary { cursor: pointer; }
 .brief .z-form-label, .brief legend { color: var(--ink); }
 .brief form { margin-top: 1.25rem; }
+.birth-star { margin-top: .5rem; }
+.birth-star > p { margin: .25rem 0; }
+.birth-star > .hint { color: inherit; }
 
 .kept-list { list-style: none; padding: 0; margin: 0; }
 .kept { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: flex-start; padding-block: 1.25rem; border-top: 1px solid var(--oat); background: var(--petal); }

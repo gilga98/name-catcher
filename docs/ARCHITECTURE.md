@@ -34,6 +34,7 @@ flowchart TB
   end
 
   smtp["SMTP provider"]
+  soota["Soota calculation service"]
   later["Payment gateway: later"]
 
   ui --> gate --> views
@@ -42,6 +43,7 @@ flowchart TB
   views --> services & accounts
   services --> catalog & dedup & accounts
   services -- "only on a catalogue miss" --> aiport --> gemini
+  services -- "if a parent adds a birth star" --> soota
   admin --> catalog
   catalog & services & accounts --> pg
   gate --> redis
@@ -83,7 +85,7 @@ sequenceDiagram
 
 ## Background work
 
-Nothing talks to a third party while a person waits, except the Google sign-in callback, which has to finish before the page can load. Jobs are rows in the database and run on thread pools inside each web process (`names/jobs.py`). Email and LLM have separate pools, so a slow LLM call can't delay a sign-in code.
+Nothing talks to a third party while a person waits, except the Google sign-in callback, which has to finish before the page can load. Jobs are rows in the database and run on thread pools inside each web process (`names/jobs.py`). Email, LLM and Soota have separate pools, so a slow LLM call can't delay a sign-in code.
 
 | Work | Person sees | Then |
 |---|---|---|
@@ -92,6 +94,31 @@ Nothing talks to a third party while a person waits, except the Google sign-in c
 | "Ask AI" | Keeps swiping | Cards join the deck when ready |
 | Family ideas | Catalogue ideas at once | LLM ideas join them |
 | Natural voice | Device voice is instant; this shows "Preparing…" | Plays when ready |
+| Name number | "Working out its number…" on the card | Polls every 2 seconds. The row is deleted on success |
+| Birth star | "Working out the birth star…" | Polls every 2 seconds, then reloads the page. The row is deleted on success |
+
+## How a birth star works
+
+A parent can enter a baby's date and time of birth and nearest city, after a separate consent. `names/soota.py` sends them to `POST /v1/natal` on Soota's engine gateway, with Naamadeva's API key, and reads the Moon's nakshatra, pada, sign and naming sounds from the answer. It reads only those fields, so new fields in Soota's answers change nothing, and an answer without them fails rather than guessing.
+
+Soota isn't reachable from the internet. Naamadeva calls the gateway by its service name on the Coolify network, so that traffic stays on our server and isn't encrypted. `names/soota.py` therefore refuses plain HTTP to anything but a private address, so a mistaken URL can't send birth details across the internet.
+
+- **Birth details aren't kept.** They wait in a job row, then the row goes: on success at once, and on failure its payload is cleared. `run_jobs` deletes anything left after an hour. They never reach the brief, the session or the logs.
+- **The result is private to parents.** `Board.birth_star` is outside the brief, so saving the brief can't erase it, and relatives never receive it. "Remove birth star" deletes it and records the withdrawal.
+- **It favours, and doesn't limit.** `engine.js` scores the baby's own sound highest, then the star's other sounds. Comparing phonetic keys means this works for any script. "Starts with" remains the hard limit.
+- **Only births in India for now,** because the form assumes IST and offers Indian cities. The star follows the Moon, so a nearby city is close enough.
+
+## How numerology works
+
+Parents turn it on in the brief. Each card then shows the number for that exact spelling, from `POST /v1/numerology` on the gateway. Numbers are plain facts: the card says when one equals the baby's birth or destiny number, and never calls a number lucky, because the tables for that differ between traditions.
+
+- **Only the name is sent,** without the family name, so a number is for the first name alone.
+- **A number belongs to a spelling.** `Name.numerology` records which one, so choosing another spelling asks again, and renaming needs no special handling.
+- **Off the request path.** A card asks `name_number`, one job covers every name waiting on the board, and after a failure cards stop asking until the page is next opened.
+- **Names in other scripts** wait until they have a Latin spelling, because letter values only exist for Latin letters.
+- `SOOTA_NUMEROLOGY_SYSTEM` picks Chaldean, the default, or Pythagorean for every board.
+
+Soota's `lucky_details.numbers` come from the chart's Trikona lords and say nothing about a name, so we don't use them.
 
 ## How insights are cached and batched
 
@@ -148,6 +175,8 @@ What someone typed is kept. A name typed in a script gets its Latin spelling onc
 | Preferences, names kept, passed and suggested by family | Yes | The signal the model needs, with no identity attached |
 | The parents' description of what the name should mean | Yes, scrubbed of contact details and long numbers | The strongest signal available, and disclosed at the point of entry |
 | Family name | Only if a parent ticks the box | Improves sound fit, but can suggest community |
+| Birth star naming sounds | Only if a parent adds a birth star, and never for family ideas | Directly shapes which names fit |
+| Birth details, the name of the star | Never | The sounds are all the model needs |
 | Email, account IDs, who voted or suggested | Never | Adds nothing to the answer |
 | Nickname, photo, "names to avoid" | Never | Adds little, and may concern a child or a named relative. Avoided names are filtered on our side |
 

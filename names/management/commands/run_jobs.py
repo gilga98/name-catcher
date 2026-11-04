@@ -7,6 +7,7 @@ class Command(BaseCommand):
     help = "Finish background jobs stranded by a restart, and tidy old ones. Safe to run every few minutes."
 
     def handle(self, *args, **options) -> None:
-        for queue in (jobs.MAIL, jobs.LLM):
+        removed = jobs.delete_finished()  # First, so a birth-details job past its limit is deleted rather than run.
+        for queue in jobs.QUEUES:
             jobs.drain(queue)
-        self.stdout.write(f"Removed {jobs.delete_finished()} finished jobs.")
+        self.stdout.write(f"Removed {removed} finished jobs.")

@@ -2,10 +2,11 @@
 
 from dataclasses import dataclass
 
+from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.db import transaction
 
-from . import accounts, catalog
+from . import accounts, catalog, soota
 from .ai.base import AIError, NameIdea, SuggestionRequest, get_ai
 from .ai.context import brief_for_llm
 from .dedup import (
@@ -17,8 +18,8 @@ from .dedup import (
     same_name,
     speech_language,
 )
-from .jobs import LLM, enqueue
-from .models import AICall, Board, CatalogName, Job, Name, Swipe, Vote, new_token
+from .jobs import LLM, SOOTA, enqueue
+from .models import AICall, Board, CatalogName, ConsentRecord, Job, Name, Swipe, Vote, new_token
 
 UNSPEAKABLE = "The natural voice isn't available for this name. Use your device's voice."
 
@@ -115,6 +116,59 @@ def _fresh(candidates: list[Name], board: Board) -> list[Name]:
     return fresh
 
 
+def birth_star_job(board: Board) -> Job | None:
+    """A finished reading deletes its job, so a row here means it's still running, or that it failed."""
+    return Job.objects.filter(board=board, kind="read_birth_star").order_by("-pk").first()
+
+
+def start_birth_star(board: Board, user: AbstractBaseUser, birth: dict) -> None:
+    job = birth_star_job(board)
+    if board.birth_star or (job and job.status != Job.Status.FAILED):
+        return
+    if job:
+        job.delete()
+    accounts.record_consent(user, ConsentRecord.Purpose.BIRTH_STAR)
+    enqueue(SOOTA, "read_birth_star", {"birth": birth}, board=board)
+    board.refresh_from_db(fields=["birth_star"])
+
+
+def remove_birth_star(board: Board, user: AbstractBaseUser) -> None:
+    board.birth_star = {}
+    board.save(update_fields=["birth_star"])
+    accounts.record_consent(user, ConsentRecord.Purpose.BIRTH_STAR, ConsentRecord.Action.WITHDRAWN)
+
+
+def birth_sounds(board: Board) -> list[str]:
+    """Phonetic keys, so they can be compared with any name's key, whatever its spelling or script."""
+    letters = board.birth_star.get("letters", [])
+    return [key for key in map(phonetic_key, letters) if key]
+
+
+def numerology_on(board: Board) -> bool:
+    return bool(settings.SOOTA_API_URL and board.brief.get("numerology"))
+
+
+def store_name_numbers(board: Board) -> None:
+    """Covers every name waiting on this board at once, and the next card to ask picks up any beyond one request."""
+    names = [name for name in board.names.exclude(status=Name.Status.PASSED).defer("audio") if name.needs_number]
+    names = names[: soota.MAX_NAMES]
+    if not names:
+        return
+    for name, numbers in zip(names, soota.read_name_numbers([name.text for name in names]), strict=True):
+        name.numerology = numbers
+    Name.objects.bulk_update(names, ["numerology"])
+
+
+def request_name_number(name: Name) -> bool:
+    """True while it's worth a card asking again. After a failure it stops, until the page is next opened."""
+    if not numerology_on(name.board) or not name.needs_number:
+        return False
+    board = name.board
+    job = enqueue(SOOTA, "read_name_numbers", {"board": board.pk}, board=board, dedupe=f"numbers-{board.pk}")
+    name.refresh_from_db(fields=["numerology"])
+    return name.needs_number and job.status != Job.Status.FAILED
+
+
 def engine_context(board: Board, voter: Voter) -> dict:
     """What the browser needs to pick names itself. Holds keys rather than text, and never the family name."""
     mine = Swipe.objects.filter(name__board=board, voter=voter.id).values_list("name__key", "liked")
@@ -126,6 +180,8 @@ def engine_context(board: Board, voter: Voter) -> dict:
         "themes": board.brief.get("themes", []),
         "uniqueness": board.brief.get("uniqueness") or "any",
         "startsWith": phonetic_key(board.brief.get("starts_with", "")),
+        "birthSound": phonetic_key(board.birth_star.get("letter", "")),
+        "birthSounds": birth_sounds(board),
         "aiAllowed": accounts.ai_allowed(board),
     }
 
@@ -143,7 +199,7 @@ def _suggestion_request(board: Board, more_like: str = "") -> SuggestionRequest:
     existing = list(board.names.defer("audio"))
     newest_first = sorted(existing, key=lambda n: n.pk or 0, reverse=True)
     return SuggestionRequest(
-        brief=brief_for_llm(board.brief),
+        brief=brief_for_llm(board.brief, board.birth_star),
         liked=[n.text for n in newest_first if n.status == Name.Status.KEPT][:30],
         passed=[n.text for n in newest_first if n.status == Name.Status.PASSED][:30],
         more_like=more_like,

@@ -1,7 +1,7 @@
-"""Runs slow third-party work off the request path. A person never waits on an email server or an LLM.
+"""Runs slow third-party work off the request path. A person never waits on an email server, an LLM or Soota.
 
 Jobs live in the database, so they survive restarts. Each web process drains them on small background thread
-pools, with no extra container to deploy. Email and LLM work have separate pools, so a slow LLM call can't delay
+pools, with no extra container to deploy. Each kind of work has its own pool, so a slow LLM call can't delay
 a sign-in code. `manage.py run_jobs` picks up anything stranded if a process dies with no traffic to follow.
 """
 
@@ -21,14 +21,18 @@ from .models import Board, Job
 
 logger = logging.getLogger(__name__)
 
-MAIL, LLM = "mail", "llm"
+MAIL, LLM, SOOTA = "mail", "llm", "soota"
+QUEUES = (MAIL, LLM, SOOTA)
+# These rows hold addresses, sign-in codes or birth details, so they don't stay once the work is done.
+PRIVATE_QUEUES = (MAIL, SOOTA)
 LEASE = timedelta(minutes=3)  # Longer than any call may take. After this, a claimed job is assumed lost.
 RECENT_FAILURE = timedelta(minutes=1)
-RETRIES = {"send_email": 5}
+SOOTA_GIVES_UP_AFTER = timedelta(hours=1)
+RETRIES = {"send_email": 5, "read_birth_star": 2}
 RETRY_SECONDS = 30
 
-_pools = {queue: ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"jobs-{queue}") for queue in (MAIL, LLM)}
-_waiting = {queue: threading.Semaphore(1) for queue in (MAIL, LLM)}
+_pools = {queue: ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"jobs-{queue}") for queue in QUEUES}
+_waiting = {queue: threading.Semaphore(1) for queue in QUEUES}
 
 
 def enqueue(queue: str, kind: str, payload: dict, *, board: Board | None = None, dedupe: str = "") -> Job:
@@ -42,8 +46,7 @@ def enqueue(queue: str, kind: str, payload: dict, *, board: Board | None = None,
             return existing
     job = Job.objects.create(queue=queue, kind=kind, payload=payload, board=board, dedupe=dedupe)
     kick(queue)
-    job.refresh_from_db()
-    return job
+    return Job.objects.filter(pk=job.pk).first() or job  # A private job may already have finished and gone.
 
 
 def kick(queue: str) -> None:
@@ -103,8 +106,8 @@ def _run_next(queue: str, tasks) -> bool:
     except Exception as exc:  # noqa: BLE001 - One bad job must never stop the rest.
         _handle_failure(job, exc)
         return True
-    if job.queue == MAIL:
-        job.delete()  # Email rows hold addresses and sign-in codes, so they don't stay after sending.
+    if job.queue in PRIVATE_QUEUES:
+        job.delete()
         return True
     job.status, job.result = Job.Status.DONE, result or {}
     job.save(update_fields=["status", "result", "updated_at"])
@@ -131,5 +134,8 @@ def _handle_failure(job: Job, exc: Exception) -> None:
 
 
 def delete_finished() -> int:
+    """Birth details don't wait for an outage to end: past the limit the parent can simply ask again."""
     finished = [Job.Status.DONE, Job.Status.FAILED]
-    return Job.objects.filter(status__in=finished, updated_at__lt=timezone.now() - timedelta(days=1)).delete()[0]
+    old = Q(status__in=finished, updated_at__lt=timezone.now() - timedelta(days=1))
+    stuck = Q(queue=SOOTA, created_at__lt=timezone.now() - SOOTA_GIVES_UP_AFTER)
+    return Job.objects.filter(old | stuck).delete()[0]

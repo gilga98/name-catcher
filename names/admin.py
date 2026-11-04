@@ -164,7 +164,7 @@ class CatalogNameAdmin(admin.ModelAdmin):
 
 @admin.register(Job)
 class JobAdmin(ReadOnlyAdmin):
-    """Without payloads, which can hold email addresses and sign-in codes."""
+    """Without payloads, which can hold email addresses, sign-in codes and birth details."""
 
     fields = list_display = ["created_at", "queue", "kind", "status", "attempts", "updated_at"]
     list_filter = ["queue", "kind", "status"]

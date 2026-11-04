@@ -6,6 +6,7 @@ from django.db import models
 from django.utils import timezone
 
 _VOWEL_GROUP = re.compile(r"[aeiouy]+")
+_LATIN_SPELLING = re.compile(r"[A-Za-z][A-Za-z '.-]*")
 
 
 def new_token() -> str:
@@ -21,6 +22,7 @@ class Board(models.Model):
     invite_token = models.CharField(max_length=32, unique=True, default=new_token)
     brief = models.JSONField(default=dict)
     family_ideas = models.JSONField(default=dict, editable=False)
+    birth_star = models.JSONField(default=dict, editable=False)  # What Soota worked out, never the birth details.
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -52,6 +54,7 @@ class Name(models.Model):
     rank = models.PositiveIntegerField(default=0)
     suggested_by = models.CharField(max_length=40, blank=True)
     audio = models.BinaryField(null=True, editable=False)
+    numerology = models.JSONField(default=dict, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -67,6 +70,16 @@ class Name(models.Model):
         if "-" in self.respelling:
             return self.respelling.count("-") + 1
         return max(len(_VOWEL_GROUP.findall(self.key)), 1)
+
+    @property
+    def current_number(self) -> dict | None:
+        """Another spelling has another number, so one saved for an old spelling doesn't count."""
+        return self.numerology if self.numerology.get("text") == self.text else None
+
+    @property
+    def needs_number(self) -> bool:
+        """Letter values only exist for Latin script. A name typed in another waits until it has a Latin spelling."""
+        return not self.current_number and bool(_LATIN_SPELLING.fullmatch(self.text))
 
     def settle(self) -> None:
         """Binned only when every parent has rejected it. Any parent's yes keeps it alive."""
@@ -213,6 +226,7 @@ class ConsentRecord(models.Model):
     class Purpose(models.TextChoices):
         TERMS = "terms"
         CONTRIBUTION = "contribution"
+        BIRTH_STAR = "birth_star"
 
     class Action(models.TextChoices):
         GIVEN = "given"

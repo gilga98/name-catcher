@@ -33,9 +33,17 @@
     return 2 - 2 * Math.abs(RARITY[entry.r] - RARITY[wanted]);
   }
 
+  // The sound for the baby's own pada counts most, then the star's other sounds. It's a preference, not a limit:
+  // parents who want it as a limit have "Starts with".
+  function birthFit(entry, state) {
+    if (state.birthSound && entry.k.startsWith(state.birthSound)) return 4;
+    return (state.birthSounds || []).some((sound) => entry.k.startsWith(sound)) ? 2 : 0;
+  }
+
   function score(entry, state, anchor) {
     const themes = entry.g.filter((genre) => state.themes.includes(genre)).length;
     return 3 * themes
+      + birthFit(entry, state)
       + rarityFit(entry, state.uniqueness)
       + 2 * closestTo(entry.k, state.liked)
       - 1.5 * closestTo(entry.k, state.passed)

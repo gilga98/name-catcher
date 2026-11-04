@@ -1,0 +1,37 @@
+<div id="birth-star" class="birth-star"{% if birth_star_pending %} hx-get="{% url 'birth_star' token %}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {% if board.birth_star %}
+  <p><strong>{{ board.birth_star.nakshatra }}</strong>, pada {{ board.birth_star.pada }}, Moon in {{ board.birth_star.sign }}. Its first sound is <strong>{{ board.birth_star.letter }}</strong>, and the star's sounds are {{ board.birth_star.letters|join:", " }}.{% if board.birth_star.birth_number %} Birth number {{ board.birth_star.birth_number }}, destiny number {{ board.birth_star.destiny_number }}.{% endif %}</p>
+  <p class="hint">Names with these sounds come first. To see only one of them, put it in "Starts with" above. Traditions differ, so check with someone you trust. Family never sees this.</p>
+  <button class="photo-button" type="button" hx-post="{% url 'remove_birth_star' token %}" hx-confirm="Remove the birth star?">Remove birth star</button>
+  {% elif birth_star_pending %}
+  <p role="status">Working out the birth star…</p>
+  {% else %}
+  <details class="brief"{% if birth_star_form.errors or birth_star_error %} open{% endif %}>
+    <summary>Add the birth star, if your family follows one</summary>
+    <form hx-post="{% url 'read_birth_star' token %}" hx-target="#birth-star" hx-swap="outerHTML" hx-disabled-elt="find button" autocomplete="off">
+      <div class="brief-grid">
+        <div class="field field-wide">
+          {% if birth_star_error %}<p class="hint" role="alert">{{ birth_star_error }}</p>{% endif %}
+          {{ birth_star_form.non_field_errors }}
+          <label class="z-form-label" for="birth-date">Date of birth</label>
+          <input class="z-input" type="date" id="birth-date" name="birth_date" value="{{ birth_star_form.birth_date.value|default:'' }}" required>
+          {{ birth_star_form.birth_date.errors }}
+          <label class="z-form-label" for="birth-time">Time of birth</label>
+          <input class="z-input" type="time" id="birth-time" name="birth_time" value="{{ birth_star_form.birth_time.value|default:'' }}" required>
+          {{ birth_star_form.birth_time.errors }}
+          <label class="z-form-label" for="birth-place">Nearest city</label>
+          <select class="z-select" id="birth-place" name="place" required>
+            <option value="">Choose a city</option>
+            {% for value, label in birth_star_form.fields.place.choices %}<option value="{{ value }}"{% if birth_star_form.place.value == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+          {{ birth_star_form.place.errors }}
+          <p class="hint">For births in India. Before the birth, there's no star to work out yet.</p>
+          <label class="check-row"><input type="checkbox" name="consent" required> <span>Send these details to Soota, our calculation service, to work out the birth star and birth numbers. We delete them once it answers, and keep only the star, its sounds and the numbers. Your partner on this board sees those too, and AI may be told the sounds.</span></label>
+          {{ birth_star_form.consent.errors }}
+        </div>
+      </div>
+      <button class="z-button z-button-default" type="submit">Find the birth star</button>
+    </form>
+  </details>
+  {% endif %}
+</div>

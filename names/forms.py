@@ -2,9 +2,10 @@ from django import forms
 from django.conf import settings
 from django.core.validators import RegexValidator
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import format_html
 
-from . import turnstile
+from . import soota, turnstile
 from .catalog import themes_from_text
 from .dedup import clean as clean_spacing
 from .dedup import looks_like_name, phonetic_key
@@ -44,11 +45,33 @@ class BriefForm(forms.Form):
     uniqueness = forms.ChoiceField(choices=UNIQUENESS, widget=forms.RadioSelect, initial="any", required=False)
     starts_with = forms.CharField(max_length=10, required=False)
     avoid = forms.CharField(max_length=200, required=False)
+    numerology = forms.BooleanField(required=False)
+
+    def numerology_available(self) -> bool:
+        return bool(settings.SOOTA_API_URL)
 
     def clean(self):
         cleaned = super().clean()
         cleaned["themes"] = themes_from_text(cleaned.get("notes", ""))
         return cleaned
+
+
+class BirthStarForm(forms.Form):
+    birth_date = forms.DateField()
+    birth_time = forms.TimeField()
+    place = forms.ChoiceField(choices=soota.PLACE_CHOICES)
+    consent = forms.BooleanField(error_messages={"required": "Tick the box so we can send these details."})
+
+    def clean(self):
+        cleaned = super().clean()
+        day, clock = cleaned.get("birth_date"), cleaned.get("birth_time")
+        if day and clock and soota.born_at(day, clock) > timezone.now():
+            self.add_error("birth_date", "A birth star can only be worked out after the birth.")
+        return cleaned
+
+    def birth_input(self) -> dict:
+        data = self.cleaned_data
+        return soota.birth_input(data["birth_date"], data["birth_time"], data["place"])
 
 
 class AddNameForm(forms.Form):

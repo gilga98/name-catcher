@@ -5,6 +5,8 @@ os.environ.setdefault("DATABASE_URL", "sqlite://:memory:")
 os.environ["DEBUG"] = "True"
 os.environ["REDIS_URL"] = ""
 os.environ["AI_BACKEND"] = "names.ai.stub.StubAI"
+os.environ["SOOTA_API_URL"] = ""
+os.environ["SOOTA_API_KEY"] = ""
 
 from .settings import *  # noqa: E402, F403
 

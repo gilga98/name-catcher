@@ -7,7 +7,7 @@ from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from . import catalog, mail, services
+from . import catalog, mail, services, soota
 from .ai.base import AIError
 from .dedup import phonetic_key
 from .models import AICall, Board, CatalogName, Job, Name
@@ -32,6 +32,15 @@ def family_ideas(job: Job) -> None:
 
 def speak(job: Job) -> None:
     services.record_audio(Name.objects.get(pk=job.payload["name"]))
+
+
+def read_birth_star(job: Job) -> None:
+    job.board.birth_star = soota.read_birth_star(job.payload["birth"])
+    job.board.save(update_fields=["birth_star"])
+
+
+def read_name_numbers(job: Job) -> None:
+    services.store_name_numbers(job.board)
 
 
 def _waiting():

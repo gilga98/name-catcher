@@ -14,6 +14,7 @@ name_actions = {
     "split": views.split_name,
     "audio": views.name_audio,
     "details": views.name_details,
+    "number": views.name_number,
 }
 
 urlpatterns = [
@@ -34,6 +35,9 @@ urlpatterns = [
     path("b/<str:token>/family-link/reset", views.reset_family_link, name="reset_family_link"),
     path("b/<str:token>/delete", views.delete_board, name="delete_board"),
     path("b/<str:token>/brief", views.update_brief, name="brief"),
+    path("b/<str:token>/birth-star", views.birth_star, name="birth_star"),
+    path("b/<str:token>/birth-star/read", views.read_birth_star, name="read_birth_star"),
+    path("b/<str:token>/birth-star/remove", views.remove_birth_star, name="remove_birth_star"),
     path("b/<str:token>/suggest", views.suggest, name="suggest"),
     path("b/<str:token>/catalog.json", views.catalog_shard, name="catalog_shard"),
     path("b/<str:token>/suggest/catalog", views.suggest_from_catalog, name="suggest_from_catalog"),

@@ -1,4 +1,4 @@
-{% for name in queue %}
+{% load birth_star %}{% for name in queue %}
 <article class="name-card" data-card-id="{{ name.pk }}" data-undo-url="{% url 'undo' token name.pk %}">
   <span class="stamp stamp-keep" aria-hidden="true">Keep</span>
   <span class="stamp stamp-pass" aria-hidden="true">Pass</span>
@@ -6,6 +6,8 @@
   <h3 class="name">{{ name.text }}{% if surname %} <span class="surname">{{ surname }}</span>{% endif %}</h3>
   {% include "names/partials/name_details.html" %}
   {% if name.suggested_by %}<p class="meta">Suggested by {{ name.suggested_by }}.</p>{% endif %}
+  {% if birth_sounds and name.key|starts_with_sound:birth_sounds %}<p class="meta">Starts with a birth star sound.</p>{% endif %}
+  {% if numerology_on %}{% include "names/partials/name_number.html" %}{% endif %}
   <div class="actions card-actions">
     <button class="z-button z-button-default" type="button" data-taste="passed" data-key="{{ name.key }}" hx-post="{% url 'pass' token name.pk %}" hx-target="closest article" hx-swap="outerHTML">Pass</button>
     <button class="z-button z-button-primary" type="button" data-taste="liked" data-key="{{ name.key }}" hx-post="{% url 'keep' token name.pk %}" hx-target="closest article" hx-swap="outerHTML">Keep</button>

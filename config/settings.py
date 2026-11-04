@@ -204,6 +204,13 @@ GEMINI_TTS_VOICE = env("GEMINI_TTS_VOICE", default="Kore")
 GEMINI_TIMEOUT_MS = env.int("GEMINI_TIMEOUT_MS", default=20000)
 GEMINI_ATTEMPTS = env.int("GEMINI_ATTEMPTS", default=2)
 
+# Soota works out birth stars. Until SOOTA_API_URL is set, nobody is asked for birth details.
+SOOTA_API_URL = env("SOOTA_API_URL", default="")
+SOOTA_API_KEY = env("SOOTA_API_KEY", default="")
+SOOTA_TIMEOUT_SECONDS = env.float("SOOTA_TIMEOUT_SECONDS", default=30.0)
+SOOTA_AYANAMSHA = env.int("SOOTA_AYANAMSHA", default=2)  # Lahiri, Soota's own default.
+SOOTA_NUMEROLOGY_SYSTEM = env("SOOTA_NUMEROLOGY_SYSTEM", default="chaldean")  # Or pythagorean.
+
 JOBS_EAGER = False  # Tests run background work inline.
 AI_ENRICH_BATCH_SIZE = env.int("AI_ENRICH_BATCH_SIZE", default=10)
 AI_ENRICH_BATCH_WINDOW_SECONDS = env.float("AI_ENRICH_BATCH_WINDOW_SECONDS", default=1.0)
@@ -215,7 +222,7 @@ MAX_PENDING_CONTRIBUTIONS = env.int("MAX_PENDING_CONTRIBUTIONS", default=2000)
 ACCOUNT_RETENTION_DAYS = env.int("ACCOUNT_RETENTION_DAYS", default=730)
 
 # Published in the legal pages. Change POLICY_VERSION when the policies change: everyone accepts again.
-POLICY_VERSION = "2026-11-04.5"
+POLICY_VERSION = "2026-11-04.7"
 LEGAL_ENTITY_NAME = env("LEGAL_ENTITY_NAME", default="")
 LEGAL_ADDRESS = env("LEGAL_ADDRESS", default="")
 LEGAL_JURISDICTION_CITY = env("LEGAL_JURISDICTION_CITY", default="")
@@ -232,4 +239,5 @@ BOARD_CREATE_RATE = env("BOARD_CREATE_RATE", default="60/h")
 BOARD_CREATE_PER_USER = env("BOARD_CREATE_PER_USER", default="20/h")
 BOARD_RATE_PER_IP = env("BOARD_RATE_PER_IP", default="300/m")
 GUEST_VOTERS_PER_IP = env("GUEST_VOTERS_PER_IP", default="30/h")
+BIRTH_STAR_RATE = env("BIRTH_STAR_RATE", default="10/h")
 RATELIMIT_VIEW = "names.views.rate_limited"

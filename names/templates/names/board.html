@@ -23,6 +23,7 @@
       <button class="z-button z-button-default" type="submit">Save changes</button>
     </form>
   </details>
+  {% if birth_star_enabled %}{% include "names/partials/birth_star.html" %}{% endif %}
 </header>
 <section class="tile tile-review" aria-labelledby="deck-title">
   <div class="deck-head">

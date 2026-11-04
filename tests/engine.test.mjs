@@ -30,6 +30,18 @@ test("learns from what was kept and passed", () => {
   assert.equal(pick(entries, state({ passed: ["tejas"] }), { count: 1 })[0].id, 2);
 });
 
+test("favours the baby's own birth sound, then the star's other sounds", () => {
+  const entries = [entry(1, "wxyz"), entry(2, "tejas"), entry(3, "mohana")];
+  const birth = { birthSound: "ti", birthSounds: ["mo", "ta", "ti", "tu"] };
+  assert.equal(pick(entries, state(birth), { count: 1 })[0].id, 3);
+  assert.equal(pick([...entries, entry(4, "tilak")], state(birth), { count: 1 })[0].id, 4);
+});
+
+test("birth sounds are a preference, not a limit", () => {
+  const picks = pick([entry(1, "wxyz")], state({ birthSound: "ti", birthSounds: ["ti"] }));
+  assert.deepEqual(picks.map((e) => e.id), [1]);
+});
+
 test("varies the set instead of returning near-identical names", () => {
   const entries = [entry(1, "tejas"), entry(2, "tejasa"), entry(3, "mohan")];
   assert.deepEqual(pick(entries, state(), { count: 2 }).map((e) => e.id).sort(), [1, 3]);

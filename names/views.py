@@ -18,8 +18,8 @@ from django_ratelimit.exceptions import Ratelimited
 from . import accounts, catalog, services
 from .ai.base import AIError
 from .analytics import allow_web_analytics
-from .forms import GENDERS, STYLES, UNIQUENESS, AddNameForm, BriefForm
-from .jobs import LLM, kick
+from .forms import GENDERS, STYLES, UNIQUENESS, AddNameForm, BirthStarForm, BriefForm
+from .jobs import LLM, SOOTA, kick
 from .models import Board, Job, Name
 from .services import Voter
 
@@ -138,6 +138,8 @@ def _context(request: HttpRequest, **extra) -> dict:
         "surname": surname,
         "baby": brief.get("nickname") or (f"baby {surname}" if surname else "baby"),
         "avatar": brief.get("avatar") or "a1",
+        "birth_sounds": services.birth_sounds(request.board) if request.is_parent else [],
+        "numerology_on": request.is_parent and services.numerology_on(request.board),
         **extra,
     }
 
@@ -218,8 +220,64 @@ def board_page(request: HttpRequest, token: str) -> HttpResponse:
         wishes=_family_context(board.brief),
         catalog_version=catalog.version(board.brief),
         by=request.session.get("voter_name", ""),
+        **_birth_star_context(request),
     )
     return render(request, "names/board.html", context)
+
+
+def _birth_star_context(request: HttpRequest, form: BirthStarForm | None = None) -> dict:
+    if not (request.is_parent and settings.SOOTA_API_URL):
+        return {"birth_star_enabled": False}
+    job = services.birth_star_job(request.board)
+    failed = job is not None and job.status == Job.Status.FAILED
+    pending = job is not None and not failed
+    if pending:
+        kick(SOOTA)  # In case the process that was working on it has gone.
+    return {
+        "birth_star_enabled": True,
+        "birth_star_form": form or BirthStarForm(),
+        "birth_star_pending": pending,
+        "birth_star_error": job.result.get("error") if failed else "",
+    }
+
+
+def _birth_star_panel(request: HttpRequest, form: BirthStarForm | None = None) -> HttpResponse:
+    if form is None and request.board.birth_star:
+        return HttpResponseClientRefresh()  # The deck reads the new sounds when the page loads.
+    context = _birth_star_context(request, form)
+    return render(request, "names/partials/birth_star.html", _context(request, **context))
+
+
+def _require_soota() -> None:
+    if not settings.SOOTA_API_URL:
+        raise Http404
+
+
+@require_GET
+@with_board(parent_only=True)
+def birth_star(request: HttpRequest, token: str) -> HttpResponse:
+    _require_soota()
+    return _birth_star_panel(request)
+
+
+@require_POST
+@with_board(parent_only=True)
+@ratelimit(group="birth-star", key=_board_token, rate=settings.BIRTH_STAR_RATE, block=True)
+def read_birth_star(request: HttpRequest, token: str) -> HttpResponse:
+    _require_soota()
+    form = BirthStarForm(request.POST)
+    if not form.is_valid():
+        return _birth_star_panel(request, form)
+    services.start_birth_star(request.board, request.user, form.birth_input())
+    return _birth_star_panel(request)
+
+
+@require_POST
+@with_board(parent_only=True)
+def remove_birth_star(request: HttpRequest, token: str) -> HttpResponse:
+    _require_soota()
+    services.remove_birth_star(request.board, request.user)
+    return HttpResponseClientRefresh()
 
 
 @require_POST
@@ -446,6 +504,14 @@ def official_spelling(request: HttpRequest, token: str, pk: int) -> HttpResponse
 def split_name(request: HttpRequest, token: str, pk: int) -> HttpResponse:
     services.split_variant(_name(request, pk), request.POST.get("variant", ""), request.voter)
     return _shortlist(request)
+
+
+@require_GET
+@with_board(parent_only=True)
+def name_number(request: HttpRequest, token: str, pk: int) -> HttpResponse:
+    name = _name(request, pk)
+    context = _context(request, name=name, stop_asking=not services.request_name_number(name))
+    return render(request, "names/partials/name_number.html", context)
 
 
 @require_POST
