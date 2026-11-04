@@ -129,6 +129,8 @@ ALLAUTH_TRUSTED_CLIENT_IP_HEADER = env("TRUSTED_CLIENT_IP_HEADER", default=None)
 # Both set: the admin panel also checks the token Cloudflare Access signs, so reaching the server directly gets nowhere.
 CF_ACCESS_TEAM_DOMAIN = env("CF_ACCESS_TEAM_DOMAIN", default="")
 CF_ACCESS_AUD = env("CF_ACCESS_AUD", default="")
+# The admin panel stays shut in production until those are set, so forgetting them can't leave it open to the internet.
+ADMIN_REQUIRES_ACCESS = env.bool("ADMIN_REQUIRES_ACCESS", default=not DEBUG)
 # Both set: sign-up asks Cloudflare Turnstile whether this is a person.
 TURNSTILE_SITE_KEY = env("TURNSTILE_SITE_KEY", default="")
 TURNSTILE_SECRET_KEY = env("TURNSTILE_SECRET_KEY", default="")
@@ -172,13 +174,15 @@ SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=not DEBUG)
 SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=0 if DEBUG else 86400)
 SECURE_REFERRER_POLICY = "same-origin"  # Share links are secrets: never leak them in Referer.
 
-CDN = "https://cdn.jsdelivr.net"
+# Only the paths we use. jsDelivr serves anyone's code, so allowing the whole host lets injected HTML load any of it.
+CDN_KIT = "https://cdn.jsdelivr.net/gh/0builddotdev/0build@0.6.13/"
+CDN_FONTS = "https://cdn.jsdelivr.net/npm/@fontsource-variable/"
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "default-src": [SELF],
-        "script-src": [SELF, CDN],
-        "style-src": [SELF, UNSAFE_INLINE, CDN],  # 0build and htmx set inline styles.
-        "font-src": [SELF, CDN],
+        "script-src": [SELF, CDN_KIT],
+        "style-src": [SELF, UNSAFE_INLINE, CDN_KIT, CDN_FONTS],  # 0build and htmx set inline styles.
+        "font-src": [SELF, CDN_KIT, CDN_FONTS],
         "img-src": [SELF, "data:"],
         "connect-src": [SELF],
         "frame-ancestors": [NONE],
@@ -206,6 +210,7 @@ AI_ENRICH_NAMES_PER_HOUR = env.int("AI_ENRICH_NAMES_PER_HOUR", default=2000)
 AI_ENRICH_CALLS_PER_HOUR = env.int("AI_ENRICH_CALLS_PER_HOUR", default=200)
 AI_FREE_CALLS_PER_MONTH = env.int("AI_FREE_CALLS_PER_MONTH", default=50)
 CATALOG_SHARD_LIMIT = env.int("CATALOG_SHARD_LIMIT", default=3000)
+MAX_PENDING_CONTRIBUTIONS = env.int("MAX_PENDING_CONTRIBUTIONS", default=2000)
 ACCOUNT_RETENTION_DAYS = env.int("ACCOUNT_RETENTION_DAYS", default=730)
 
 # Published in the legal pages. Change POLICY_VERSION when the policies change: everyone accepts again.

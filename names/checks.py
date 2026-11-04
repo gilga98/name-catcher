@@ -6,8 +6,8 @@ from django.core.checks import Tags, Warning, register
 _REQUIRED = (
     ("REDIS_URL", "Without it, each worker keeps its own rate-limit counters, and a restart clears them."),
     ("ALLAUTH_TRUSTED_CLIENT_IP_HEADER", "Set TRUSTED_CLIENT_IP_HEADER, or every visitor shares one proxy address."),
-    ("CF_ACCESS_TEAM_DOMAIN", "Without it, the admin panel doesn't check the Cloudflare Access token."),
-    ("CF_ACCESS_AUD", "Without it, the admin panel doesn't check the Cloudflare Access token."),
+    ("CF_ACCESS_TEAM_DOMAIN", "Without it, the admin panel stays closed."),
+    ("CF_ACCESS_AUD", "Without it, the admin panel stays closed."),
     ("TURNSTILE_SITE_KEY", "Without it, nothing stops bots signing up."),
     ("TURNSTILE_SECRET_KEY", "Without it, nothing stops bots signing up."),
 )

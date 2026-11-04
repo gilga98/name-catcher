@@ -85,6 +85,10 @@ def delete(request: HttpRequest) -> HttpResponse:
 
 
 def _contribute(request: HttpRequest, form: ContributeForm) -> catalog.ImportResult:
+    waiting = CatalogName.objects.filter(submitted_by=request.user, status=CatalogName.Status.PENDING).count()
+    room = settings.MAX_PENDING_CONTRIBUTIONS - waiting
+    if room <= 0:
+        return catalog.ImportResult(errors=["Thanks! Many of your names are waiting for review. Add more afterwards."])
     data = form.cleaned_data
     options = catalog.ImportOptions(
         source=CatalogName.Source.USER,
@@ -93,6 +97,7 @@ def _contribute(request: HttpRequest, form: ContributeForm) -> catalog.ImportRes
         origin=data["origin"],
         gender=data["gender"] or "any",
         submitted_by=request.user,
+        row_limit=min(catalog.ImportOptions.row_limit, room),
     )
     accounts.record_consent(request.user, ConsentRecord.Purpose.CONTRIBUTION)
     return catalog.import_rows(data["names"], options)

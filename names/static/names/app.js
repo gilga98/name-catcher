@@ -1,4 +1,16 @@
-const toast = (message) => zUIkit.notification(message, { pos: "bottom-center", status: "danger" });
+const SOMETHING_WENT_WRONG = "Something went wrong. Please try again.";
+
+// The toolkit renders messages as HTML, so they're always escaped first.
+function toast(message) {
+  const safe = document.createElement("div");
+  safe.textContent = message;
+  zUIkit.notification(safe.innerHTML, { pos: "bottom-center", status: "danger" });
+}
+
+// Our errors are plain text. Anything else is an error page from somewhere along the way, not a message for people.
+function errorMessage(contentType, body) {
+  return (contentType || "").startsWith("text/plain") ? body : SOMETHING_WENT_WRONG;
+}
 
 function hasVoiceFor(lang) {
   const voices = speechSynthesis.getVoices();
@@ -28,7 +40,7 @@ async function fetchVoice(url) {
   for (let attempt = 0; attempt < VOICE_ATTEMPTS; attempt++) {
     const response = await fetch(url);
     if (response.status === 200) return response.blob();
-    if (response.status !== 202) throw new Error(await response.text());
+    if (response.status !== 202) throw new Error(errorMessage(response.headers.get("Content-Type"), await response.text()));
     await new Promise((resolve) => setTimeout(resolve, VOICE_WAIT_MS));
   }
   throw new Error("The natural voice is taking too long. Try your device's voice.");
@@ -106,7 +118,10 @@ document.addEventListener("click", (event) => {
   else copy(button);
 });
 
-document.body.addEventListener("htmx:responseError", (event) => toast(event.detail.xhr.responseText));
+document.body.addEventListener("htmx:responseError", (event) => {
+  const { xhr } = event.detail;
+  toast(errorMessage(xhr.getResponseHeader("Content-Type"), xhr.responseText));
+});
 document.body.addEventListener("htmx:sendError", () => toast("Couldn't reach the server. Check your connection."));
 document.body.addEventListener("htmx:afterRequest", (event) => {
   if (event.detail.successful && event.target.matches("[data-idea]")) event.target.closest("li").remove();

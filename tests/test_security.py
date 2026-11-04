@@ -382,6 +382,15 @@ def test_one_contributor_counts_once():
     assert entry.submissions == 2
 
 
+@override_settings(MAX_PENDING_CONTRIBUTIONS=2)
+def test_one_contributor_cannot_flood_the_review_queue():
+    _, client = parent()
+    client.post(reverse("contribute"), {"names": "Zoravar\nTanvi\nHridaan", "rights": "on"})
+    response = client.post(reverse("contribute"), {"names": "Ahana", "rights": "on"})
+    assert CatalogName.objects.count() == 2
+    assert "waiting for review" in response.content.decode()
+
+
 def test_a_second_person_still_counts():
     _, client = parent()
     _, other = parent("other@example.com")
@@ -475,6 +484,24 @@ def test_the_admin_opens_with_a_valid_access_token(access_keys):
 @override_settings(**ACCESS)
 def test_the_access_check_leaves_the_public_site_alone(access_keys):
     assert Client().get("/").status_code == 200
+
+
+@override_settings(ADMIN_REQUIRES_ACCESS=True)
+def test_the_admin_stays_closed_until_access_is_configured():
+    assert Client().get("/manage/").status_code == 404
+    assert Client().get("/manage/login/").status_code == 404
+    assert Client().get("/").status_code == 200
+
+
+@override_settings(**ACCESS, ADMIN_REQUIRES_ACCESS=True)
+def test_configuring_access_opens_the_admin(access_keys):
+    assert Client().get("/manage/", HTTP_CF_ACCESS_JWT_ASSERTION=access_token()).status_code == 302
+
+
+def test_the_security_policy_only_allows_the_cdn_paths_we_use():
+    policy = Client().get("/").headers["Content-Security-Policy"]
+    assert "https://cdn.jsdelivr.net/gh/0builddotdev/0build@0.6.13/" in policy
+    assert "https://cdn.jsdelivr.net " not in policy and "https://cdn.jsdelivr.net;" not in policy
 
 
 @override_settings(**ACCESS)

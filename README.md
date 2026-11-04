@@ -35,7 +35,7 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 | `AI_ENRICH_BATCH_SIZE`, `AI_ENRICH_BATCH_WINDOW_SECONDS`, `AI_ENRICH_NAMES_PER_HOUR`, `AI_ENRICH_CALLS_PER_HOUR` | No | Approved names per LLM call, how long to wait to fill a batch, and the hourly caps on names and calls for tagging. Unreviewed names always get a call of their own. |
 | `AI_FREE_CALLS_PER_MONTH`, `CATALOG_SHARD_LIMIT`, `ACCOUNT_RETENTION_DAYS` | No | LLM allowance per parent, names per browser shard, days before an idle account is deleted. |
 | `TRUSTED_CLIENT_IP_HEADER` | Yes, behind Cloudflare | `CF-Connecting-IP`, so limits apply per visitor. Only safe once the server is reachable solely through Cloudflare, because anyone else could send this header. |
-| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | Yes | Your `<team>.cloudflareaccess.com` and the Access application's AUD tag. The admin panel then refuses requests without a valid Access token, even if someone reaches the server directly. |
+| `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` | Yes | Your `<team>.cloudflareaccess.com` and the Access application's AUD tag. The admin panel then refuses requests without a valid Access token, even if someone reaches the server directly. Until both are set, it answers 404 in production. |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Yes | Asks Cloudflare whether someone signing up is a person. If Cloudflare can't answer, sign-up pauses. |
 | `SECURE_SSL_REDIRECT`, `SECURE_HSTS_SECONDS` | No | On unless `DEBUG`. HSTS starts at a day: raise it to `31536000` once HTTPS is proven, because browsers can't be told to forget it. |
 | `WEB_CONCURRENCY` | No | Gunicorn workers. Defaults to 2. |

@@ -3,7 +3,7 @@ from urllib.parse import urlencode
 
 import jwt
 from django.conf import settings
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django_htmx.http import HttpResponseClientRedirect
@@ -41,10 +41,12 @@ class CloudflareAccessMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        guarded = settings.CF_ACCESS_TEAM_DOMAIN and settings.CF_ACCESS_AUD
-        if guarded and request.path.startswith(f"/{settings.ADMIN_PATH}"):
-            if not _signed_by_access(request.headers.get("Cf-Access-Jwt-Assertion", "")):
-                return HttpResponse("Sign in through Cloudflare Access.", status=403, content_type="text/plain")
+        if request.path.startswith(f"/{settings.ADMIN_PATH}"):
+            if settings.CF_ACCESS_TEAM_DOMAIN and settings.CF_ACCESS_AUD:
+                if not _signed_by_access(request.headers.get("Cf-Access-Jwt-Assertion", "")):
+                    return HttpResponse("Sign in through Cloudflare Access.", status=403, content_type="text/plain")
+            elif settings.ADMIN_REQUIRES_ACCESS:
+                raise Http404
         return self.get_response(request)
 
 
