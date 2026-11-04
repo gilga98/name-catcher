@@ -306,7 +306,7 @@ def fetch_family_ideas(board: Board, *, refresh: bool = False) -> None:
         accounts.charge_ai_call(board, AICall.Kind.SUGGEST)
         # Relatives can see the catalogue's ideas, so the first ask can rule them out without hiding them afterwards.
         ideas = _ask_llm(_family_request(board, shown or on_screen))
-        names = [{"text": idea.name[:60], "meaning": idea.meaning} for idea in ideas]
+        names = [{"text": idea.name[:60], "meaning": idea.meaning, "answer": idea.model_dump()} for idea in ideas]
     except AIError:
         names = []  # They can still type their own, so a failure here isn't worth an error.
     stamp = catalog.brief_stamp(board.brief)
@@ -360,6 +360,7 @@ def add_name(board: Board, text: str, voter: Voter, *, force: bool = False) -> A
         if duplicate:
             return AddResult(duplicate=duplicate)
         name = _typed_name(board, text, key, suggested_by=voter.name)
+        _use_family_answer(name)
         name.save()
         if voter.is_parent:
             keep(name, voter)
@@ -376,14 +377,13 @@ class Details:
     READY, PENDING, UNAVAILABLE = "ready", "pending", "unavailable"
 
 
-def _apply_details(name: Name, entry: CatalogName) -> None:
-    details = _from_catalog(name.board, entry)
+def _apply_details(name: Name, details: Name) -> None:
     name.meaning, name.origin = details.meaning, details.origin
     if details.native:
         name.native = details.native
     # Someone reading only Latin should be able to read this. What they typed stays as its native spelling.
-    if not name.text.isascii() and entry.text.isascii():
-        name.native, name.text = name.text, entry.text
+    if not name.text.isascii() and details.text.isascii():
+        name.native, name.text = name.text, details.text
     name.respelling = details.respelling or name.text
     # The voice has to match the script on the card, which only we know for certain.
     name.speech_lang = speech_language(name.native) or details.speech_lang or name.speech_lang
@@ -391,8 +391,21 @@ def _apply_details(name: Name, entry: CatalogName) -> None:
     name.surname_fit, name.insight, name.tags = details.surname_fit, details.insight, details.tags
 
 
+def _use_family_answer(name: Name) -> bool:
+    """The LLM already described this idea for this board. Its prompt held only what relatives can see, so the answer
+    is safe for them and the parents here. Other families' prompts differ, so it doesn't serve them."""
+    if catalog.lookup(name.key):
+        return False
+    key = phonetic_key(name.text)
+    ideas = _stored_family_ideas(name.board).get("names", [])
+    answer = next((idea["answer"] for idea in ideas if "answer" in idea and phonetic_key(idea["text"]) == key), None)
+    if answer:
+        _apply_details(name, _build_name(name.board, NameIdea(**answer)))
+    return bool(answer)
+
+
 def _copy_details(name: Name, entry: CatalogName) -> None:
-    _apply_details(name, entry)
+    _apply_details(name, _from_catalog(name.board, entry))
     name.save(
         update_fields=[
             "text", "native", "meaning", "origin", "respelling", "sounds_like", "speech_lang", "surname_fit", "insight",
@@ -420,6 +433,9 @@ def preview_name(board: Board, text: str, *, start: bool) -> tuple[Name, str]:
     board's names decide only whether that's worth paying for, because sending this one would merge it. They never
     add to the card: it looks like a description that failed, so it doesn't reveal what's on the board."""
     key = catalog.canonical_key(text)
+    name = _typed_name(board, text, key)
+    if _use_family_answer(name):
+        return name, Details.READY
     if start and catalog.lookup(key) is None and accounts.ai_allowed(board):
         if not catalog.being_described(key) and find_duplicate(text, board.names.all(), key=key):
             return _typed_name(board, text, key), Details.PENDING  # The next check finds nothing and says so.
@@ -428,7 +444,7 @@ def preview_name(board: Board, text: str, *, start: bool) -> tuple[Name, str]:
     name = _typed_name(board, text, key)
     entry = catalog.lookup(key)
     if entry:
-        _apply_details(name, entry)
+        _apply_details(name, _from_catalog(board, entry))
         return name, Details.READY
     return name, Details.PENDING if catalog.being_described(key) else Details.UNAVAILABLE
 

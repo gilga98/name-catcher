@@ -203,7 +203,7 @@ Descriptions and family names never reach the shared catalogue. `describe` calls
 Assume someone will try to give the model instructions through any of this, and that it may obey. So:
 
 - It has no tools or secrets to misuse.
-- Family ideas are read by relatives, so their prompt holds only what relatives can already see, and no text a relative typed.
+- Family ideas are read by relatives, so their prompt holds only what relatives can already see, and no text a relative typed. The full answer stays on that board, so tapping an idea needs no second LLM call. Other families don't get it until the catalogue has an answer of its own.
 - A family preview is built from the catalogue alone and saves nothing on the board. The board only decides whether a description is worth paying for: a name that sending would merge gets no LLM call, and its card reads like a description that failed, so it doesn't reveal what's on the board.
 - Answers lose any field holding a link or phone number, and anything that doesn't look like a name is dropped.
 - A recording is shared by key, so only text that sounds like that key is ever spoken.

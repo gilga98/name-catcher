@@ -1,4 +1,5 @@
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -8,7 +9,7 @@ from django.urls import reverse
 
 from names import catalog, services
 from names.accounts import profile_of, record_consent
-from names.ai.base import AIError
+from names.ai.base import AIError, NameIdea
 from names.ai.stub import StubAI
 from names.jobs import LLM, drain
 from names.models import Board, CatalogName, Job, Name, Swipe, Vote
@@ -441,6 +442,62 @@ def test_a_preview_pays_for_nothing_when_the_name_is_already_on_the_board(board)
     assert not CatalogName.objects.exists()
     checked = preview(board, "Mohammed", checking="1").content.decode()
     assert "catalogue yet" in checked and "Muhammad" not in checked
+
+
+def ask_for_family_idea(board, monkeypatch, text="Oviya"):
+    answer = NameIdea(
+        name=text,
+        native_script="ஓவியா",
+        meaning="Painting",
+        origin="Tamil",
+        respelling="OH-vee-yaa",
+        sounds_like="oviya",
+        speech_lang="ta-IN",
+        gender="girl",
+        rarity="rare",
+        style="any",
+        genres=[],
+        insight="Soft sounds",
+        surname_fit="",
+    )
+    monkeypatch.setattr("names.services.get_ai", lambda: SimpleNamespace(suggest=lambda request: [answer]))
+    services.fetch_family_ideas(board)
+
+
+def test_a_family_idea_is_not_described_a_second_time(board, monkeypatch):
+    parent(board, "a@example.com")
+    ask_for_family_idea(board, monkeypatch)
+    monkeypatch.setattr(catalog, "request_enrichment", lambda *args: pytest.fail("the LLM already described this"))
+    assert "Painting" in preview(board).content.decode()
+    Client().post(reverse("add", args=[board.guest_token]), {"text": "Oviya", "by": "Maa"}, **HTMX)
+    name = board.names.get()
+    assert (name.meaning, name.respelling, name.insight) == ("Painting", "OH-vee-yaa", "Soft sounds")
+    assert name.suggested_by == "Maa"
+
+
+def test_another_spelling_of_a_family_idea_reuses_it_too(board, monkeypatch):
+    parent(board, "a@example.com")
+    ask_for_family_idea(board, monkeypatch, "Aarav")
+    monkeypatch.setattr(catalog, "request_enrichment", lambda *args: pytest.fail("the LLM already described this"))
+    assert "Painting" in preview(board, "Arav").content.decode()
+
+
+def test_a_family_answer_stays_on_the_board_that_asked(board, monkeypatch):
+    parent(board, "a@example.com")
+    ask_for_family_idea(board, monkeypatch)
+    other = Board.objects.create(brief={})
+    parent(other, "b@example.com")
+    with override_settings(JOBS_EAGER=False):
+        assert "Painting" not in preview(other).content.decode()
+
+
+def test_ideas_stored_before_answers_were_kept_still_work(board):
+    parent(board, "a@example.com")
+    idea = {"text": "Oviya", "meaning": "Painting"}
+    board.family_ideas = {"stamp": catalog.brief_stamp(board.brief), "names": [idea]}
+    board.save()
+    with override_settings(JOBS_EAGER=False):
+        assert "Adding tags and meaning" in preview(board).content.decode()
 
 
 def test_checking_on_a_card_cant_start_a_description(board):
