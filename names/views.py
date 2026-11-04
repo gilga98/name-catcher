@@ -118,7 +118,7 @@ def with_board(*, parent_only: bool = False):
 
 
 def _name(request: HttpRequest, pk: int) -> Name:
-    return get_object_or_404(request.board.names.defer("audio"), pk=pk)
+    return get_object_or_404(request.board.names, pk=pk)
 
 
 def _context(request: HttpRequest, **extra) -> dict:
@@ -330,7 +330,7 @@ def suggest_from_catalog(request: HttpRequest, token: str) -> HttpResponse:
 def _ai_status(request: HttpRequest, job: Job) -> HttpResponse:
     """Parents keep swiping while AI works. This small element polls, then adds its cards to the deck."""
     if job.status == Job.Status.DONE:
-        names = request.board.names.filter(pk__in=job.result.get("names", [])).defer("audio")
+        names = request.board.names.filter(pk__in=job.result.get("names", []))
         where = "afterbegin" if job.payload.get("more_like") else "beforeend"
         context = _context(request, queue=names, finished=True, where=where)
     elif job.status == Job.Status.FAILED:

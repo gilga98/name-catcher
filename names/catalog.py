@@ -57,8 +57,7 @@ _GENRE_WORDS = {
 
 
 def _approved():
-    # Nearly every name will have a recording, so reading one along with each row would make every list heavy.
-    return CatalogName.objects.filter(status=CatalogName.Status.APPROVED).defer("audio")
+    return CatalogName.objects.filter(status=CatalogName.Status.APPROVED)
 
 
 def version(brief: dict) -> str:
@@ -106,7 +105,7 @@ def record_picks(entries: Iterable[CatalogName]) -> None:
 def canonical_key(text: str) -> str:
     """The phonetic key, then whichever entry we've learned that spelling belongs to."""
     key = phonetic_key(text)[:60]
-    alias = NameAlias.objects.filter(key=key).select_related("entry").defer("entry__audio").first()
+    alias = NameAlias.objects.filter(key=key).select_related("entry").first()
     return alias.entry.key if alias else key
 
 
@@ -116,13 +115,13 @@ def lookup(key: str) -> CatalogName | None:
     trusted = Q(status=CatalogName.Status.APPROVED) | Q(
         status=CatalogName.Status.PENDING, enrich_state=CatalogName.Enrich.DONE
     )
-    return CatalogName.objects.filter(trusted, key=key).exclude(meaning="").defer("audio").first()
+    return CatalogName.objects.filter(trusted, key=key).exclude(meaning="").first()
 
 
 def request_enrichment(text: str, key: str) -> bool:
     """Queues this name for the next LLM batch, unless it's already waiting. False means it won't get one."""
     waiting = {"text": text[:60], "source": CatalogName.Source.LLM, "enrich_state": CatalogName.Enrich.PENDING}
-    entry, _ = CatalogName.objects.defer("audio").get_or_create(key=key, defaults=waiting)
+    entry, _ = CatalogName.objects.get_or_create(key=key, defaults=waiting)
     if entry.status == CatalogName.Status.REJECTED:
         return False
     if entry.enrich_state == CatalogName.Enrich.FAILED and timezone.now() - entry.updated_at < RETRY_FAILED_AFTER:
@@ -149,7 +148,7 @@ def wait_for_batch() -> None:
 def _merge_spelling(entry: CatalogName, canonical: str) -> CatalogName:
     """The LLM says this is another spelling of `canonical`. Remember that, so this one never costs a call again."""
     old_key = entry.key
-    target = CatalogName.objects.filter(key=canonical).exclude(pk=entry.pk).defer("audio").first()
+    target = CatalogName.objects.filter(key=canonical).exclude(pk=entry.pk).first()
     if target is None:
         entry.key = canonical
         entry.save(update_fields=["key"])
@@ -402,7 +401,7 @@ def _import_row(index: int, row: dict, options: ImportOptions, known: dict[str, 
         return
     fields = _fields_from(row, options, key)
     genres = _row_genres(row, options, known)
-    entry = CatalogName.objects.filter(key=key).defer("audio").first()
+    entry = CatalogName.objects.filter(key=key).first()
     if entry:
         _merge(entry, fields, genres, options, result)
     else:

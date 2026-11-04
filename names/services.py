@@ -50,7 +50,7 @@ def join_board(board: Board, user: AbstractBaseUser) -> None:
     board.invite_token = new_token()
     board.save(update_fields=["invite_token"])
     # A name one parent binned alone isn't rejected by both any more, so the new parent gets to decide on it.
-    for name in board.names.filter(swipes__isnull=False).distinct().defer("audio"):
+    for name in board.names.filter(swipes__isnull=False).distinct():
         name.settle()
 
 
@@ -108,7 +108,7 @@ class _Keyed:
 
 def _fresh(candidates: list[Name], board: Board) -> list[Name]:
     """Drop anything the family has seen or asked to avoid, across spellings and scripts."""
-    pool = [*board.names.defer("audio"), *map(_Keyed, _avoided(board))]
+    pool = [*board.names.all(), *map(_Keyed, _avoided(board))]
     fresh: list[Name] = []
     for name in candidates:
         if closest(name.key, [*pool, *fresh], ALMOST_CERTAINLY_SAME) is None:
@@ -150,7 +150,7 @@ def numerology_on(board: Board) -> bool:
 
 def store_name_numbers(board: Board) -> None:
     """Covers every name waiting on this board at once, and the next card to ask picks up any beyond one request."""
-    names = [name for name in board.names.exclude(status=Name.Status.PASSED).defer("audio") if name.needs_number]
+    names = [name for name in board.names.exclude(status=Name.Status.PASSED) if name.needs_number]
     names = names[: soota.MAX_NAMES]
     if not names:
         return
@@ -197,7 +197,7 @@ def add_from_catalog(board: Board, ids: list[int]) -> list[Name]:
 
 
 def _suggestion_request(board: Board, more_like: str = "") -> SuggestionRequest:
-    existing = list(board.names.defer("audio"))
+    existing = list(board.names.all())
     newest_first = sorted(existing, key=lambda n: n.pk or 0, reverse=True)
     return SuggestionRequest(
         brief=brief_for_llm(board.brief, board.birth_star),
@@ -333,7 +333,7 @@ def family_ideas(board: Board, *, allow_llm: bool) -> list[dict]:
 def add_name(board: Board, text: str, voter: Voter, *, force: bool = False) -> AddResult:
     """Local and instant. describe_name fills in the details afterwards, so nobody waits on the LLM."""
     key = catalog.canonical_key(text)
-    duplicate = None if force else find_duplicate(text, board.names.defer("audio"), key=key)
+    duplicate = None if force else find_duplicate(text, board.names.all(), key=key)
     if duplicate and not voter.is_parent:
         # "Is this the same as...?" would give away what's on the board, so their support joins it without asking.
         merge_into(duplicate, text, voter)
@@ -405,7 +405,7 @@ def prepare_names(board: Board, names: list[Name]) -> None:
 
 def fill_boards(entry: CatalogName) -> None:
     """One LLM answer reaches every family waiting on that name."""
-    waiting = Name.objects.filter(key=entry.key, respelling="").select_related("board").defer("audio")
+    waiting = Name.objects.filter(key=entry.key, respelling="").select_related("board")
     for name in waiting:
         _copy_details(name, entry)
 
@@ -503,7 +503,7 @@ def with_partner_notes(names: list[Name], board: Board, voter: Voter) -> list[Na
 
 def deck_for(board: Board, voter: Voter) -> list[Name]:
     """Everything still alive that this parent hasn't decided on, including what their partner already decided."""
-    names = board.names.exclude(status=Name.Status.PASSED).defer("audio").prefetch_related("swipes")
+    names = board.names.exclude(status=Name.Status.PASSED).prefetch_related("swipes")
     live = [n for n in names if n.status == Name.Status.REVIEW or n.swipes.all()]
     undecided = [n for n in live if not any(s.voter == voter.id for s in n.swipes.all())]
     return with_partner_notes(undecided, board, voter)
@@ -526,7 +526,7 @@ def decisions(board: Board, voter: Voter) -> dict:
 
 
 def binned(board: Board) -> list[Name]:
-    return list(board.names.filter(status=Name.Status.PASSED).defer("audio"))
+    return list(board.names.filter(status=Name.Status.PASSED))
 
 
 def set_order(board: Board, name_ids: list[int]) -> None:
@@ -557,7 +557,7 @@ def shortlist(board: Board, voter: Voter) -> list[Name]:
     """Parents see everything either of them kept. Family only suggest, so they see none of it."""
     if not voter.is_parent:
         return []
-    names = list(board.names.filter(status=Name.Status.KEPT).prefetch_related("votes", "swipes").defer("audio"))
+    names = list(board.names.filter(status=Name.Status.KEPT).prefetch_related("votes", "swipes"))
     with_partner_notes(names, board, voter)
     for name in names:
         name.mine = any(vote.voter == voter.id for vote in name.votes.all())

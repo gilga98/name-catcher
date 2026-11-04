@@ -49,7 +49,7 @@ def read_name_numbers(job: Job) -> None:
 
 def _waiting():
     lost = Q(enrich_state=CatalogName.Enrich.RUNNING, enrich_claimed_at__lt=timezone.now() - ENRICH_LEASE)
-    return CatalogName.objects.filter(Q(enrich_state=CatalogName.Enrich.PENDING) | lost).defer("audio")
+    return CatalogName.objects.filter(Q(enrich_state=CatalogName.Enrich.PENDING) | lost)
 
 
 def _over_budget() -> bool:
@@ -123,7 +123,7 @@ def _lacking_sounds_like():
     lacking = CatalogName.objects.filter(sounds_like="", sounds_like_attempts__lt=MAX_RESPELL_ATTEMPTS)
     lacking = lacking.exclude(meaning="").exclude(status=CatalogName.Status.REJECTED)
     lacking = lacking.exclude(enrich_state__in=being_described)
-    return lacking.defer("audio").annotate(on_board=Exists(Name.objects.filter(key=OuterRef("key"))))
+    return lacking.annotate(on_board=Exists(Name.objects.filter(key=OuterRef("key"))))
 
 
 def _next_respelling() -> list[CatalogName]:

@@ -57,7 +57,6 @@ class Name(models.Model):
     source = models.CharField(max_length=10, choices=Source, default=Source.FAMILY)
     rank = models.PositiveIntegerField(default=0)
     suggested_by = models.CharField(max_length=40, blank=True)
-    audio = models.BinaryField(null=True, editable=False)  # Unused. The next deploy drops it.
     numerology = models.JSONField(default=dict, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -224,11 +223,6 @@ class CatalogName(models.Model):
     submissions = models.PositiveIntegerField(default=1)  # How many people independently offered this name.
     supporters = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="+")
     picks = models.PositiveIntegerField(default=0)  # How often it reached a board. High means overused.
-    # Unused. The next deploy drops these four.
-    audio = models.BinaryField(null=True, editable=False)
-    voice_state = models.CharField(max_length=10, choices=Enrich, default=Enrich.NONE, db_index=True)
-    voice_attempts = models.PositiveSmallIntegerField(default=0)
-    voice_claimed_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

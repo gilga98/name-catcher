@@ -114,5 +114,5 @@ def delete_account(user: AbstractBaseUser) -> None:
     )
     user.delete()  # Consent and AI rows keep their dates but lose the link to a person.
     for board in shared:
-        for name in board.names.filter(swipes__isnull=False).distinct().defer("audio"):
+        for name in board.names.filter(swipes__isnull=False).distinct():
             name.settle()

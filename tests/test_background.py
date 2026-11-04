@@ -525,12 +525,6 @@ def test_filling_in_is_spaced_out_and_a_later_wake_continues(speller):
     assert len(speller.asked) == 2
 
 
-def test_lists_of_names_leave_recordings_behind():
-    entry = listed("Zubin", audio=b"RIFF")
-    assert "audio" in catalog.pick([entry.pk])[0].get_deferred_fields()
-    assert "audio" in catalog.lookup(entry.key).get_deferred_fields()
-
-
 # Email
 
 

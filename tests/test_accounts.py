@@ -118,7 +118,7 @@ def test_export_holds_my_data_and_nothing_secret():
     user = make_user()
     board = Board.objects.create(brief={"surname": "Rao"})
     board.members.add(user)
-    Name.objects.create(board=board, text="Tara", key="tara", audio=b"RIFF")
+    Name.objects.create(board=board, text="Tara", key="tara")
     response = logged_in(user).get(reverse("account_export"))
     assert "attachment" in response["Content-Disposition"]
     data = json.loads(response.content)

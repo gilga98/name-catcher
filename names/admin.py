@@ -92,14 +92,10 @@ class CatalogNameAdmin(admin.ModelAdmin):
         "key", "source", "submitted_by", "submissions", "picks", "updated_at", "enrich_state",
     ]  # fmt: skip
     exclude = [
-        "enrich_attempts", "enrich_claimed_at", "sounds_like_attempts", "voice_state", "voice_attempts",
-        "voice_claimed_at",
+        "enrich_attempts", "enrich_claimed_at", "sounds_like_attempts",
     ]  # fmt: skip
     actions = ["approve", "reject"]
     ordering = ["-submissions", "text"]
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).defer("audio")
 
     @admin.action(description="Approve selected names")
     def approve(self, request, queryset) -> None:
