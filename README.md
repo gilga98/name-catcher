@@ -1,6 +1,6 @@
 # Naamadeva
 
-Helps parents choose a baby name: suggestions from a human-reviewed catalogue, ranked in the browser, with Gemini as a last resort. Pronunciation, a shortlist, family voting, and duplicate detection across spellings and Indian scripts. Django, HTMX and [0build](https://0build.dev). See [the architecture](docs/ARCHITECTURE.md).
+Helps parents choose a baby name: suggestions from a human-reviewed catalogue, ranked in the browser, with Gemini as a last resort. Pronunciation, a shortlist, family suggestions, and duplicate detection across spellings and Indian scripts. Django, HTMX and [0build](https://0build.dev). See [the architecture](docs/ARCHITECTURE.md).
 
 ## Run locally
 
@@ -57,7 +57,7 @@ Create a staff user with `python manage.py createsuperuser`, then open `/manage/
 
 - Parents sign up with email and password and verify a code by email (django-allauth). Their boards are private to members.
 - A partner joins through a single-use invite link, using their own account.
-- Relatives use the family link with no account: they can only vote and suggest, and only reach the names their shortlist shows. Parents can replace the link at any time.
+- Relatives use the family link with no account: they can only suggest, and can't see any names on the board. Parents can replace the link at any time.
 
 ## Failure behaviour
 

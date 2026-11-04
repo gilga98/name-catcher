@@ -234,17 +234,14 @@ def test_a_name_typed_in_a_script_works_from_start_to_finish(typed, language, bo
     assert name.speech_lang == language and name.suggested_by == "ಅಮ್ಮ"
     assert typed in client.get(reverse("board", args=[board.parent_token])).content.decode()
     assert client.post(reverse("keep", args=[board.parent_token, name.pk]), **HTMX).status_code == 200
-    assert guest.post(reverse("vote", args=[board.guest_token, name.pk]), **HTMX).status_code == 200
-    assert Vote.objects.count() == 2
+    assert Vote.objects.count() == 1
     assert client.get(reverse("account_export")).status_code == 200
 
 
-def test_the_same_name_in_two_scripts_is_recognised_for_the_family(board):
-    guest = Client()
-    url = reverse("add", args=[board.guest_token])
-    guest.post(url, {"text": "ಆರವ"}, **HTMX)
+def test_the_same_name_in_two_scripts_is_recognised_for_the_family(board, client):
+    Client().post(reverse("add", args=[board.guest_token]), {"text": "ಆರವ"}, **HTMX)
     board.names.update(status=Name.Status.KEPT)
-    response = guest.post(url, {"text": "आरव"}, **HTMX)
+    response = client.post(reverse("add", args=[board.parent_token]), {"text": "आरव"}, **HTMX)
     assert "the same name as" in response.content.decode()
     assert board.names.count() == 1
 
@@ -330,6 +327,12 @@ def test_family_ideas_show_the_catalogue_at_once_while_the_llm_runs_behind(board
     CatalogName.objects.create(key="oviya", text="Oviya", meaning="Painting", status="approved")
     html = Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX).content.decode()
     assert "Oviya" in html and "Finding more ideas" in html
+
+
+def test_a_tapped_family_idea_cant_be_sent_twice_while_it_waits(board):
+    CatalogName.objects.create(key="oviya", text="Oviya", meaning="Painting", status="approved")
+    html = Client().post(reverse("family_ideas", args=[board.guest_token]), **HTMX).content.decode()
+    assert 'hx-disabled-elt="this"' in html
 
 
 def test_a_failed_ai_search_says_why_in_place(board, client, monkeypatch):

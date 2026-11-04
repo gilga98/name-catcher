@@ -1,10 +1,10 @@
 {% load birth_star ui %}<section id="shortlist" class="shortlist"{% if oob %} hx-swap-oob="true"{% endif %}>
   <h2>Shortlist</h2>
   {% if shortlist %}
-  <ol class="kept-list"{% if is_parent %} data-z-sortable="handle: .handle" hx-post="{% url 'rank' token %}" hx-trigger="moved" hx-include="this" hx-swap="none"{% endif %}>
+  <ol class="kept-list" data-z-sortable="handle: .handle" hx-post="{% url 'rank' token %}" hx-trigger="moved" hx-include="this" hx-swap="none">
     {% for name in shortlist %}
     <li class="kept">
-      {% if is_parent %}<input type="hidden" name="order" value="{{ name.pk }}"><span class="handle" title="Drag to reorder" aria-hidden="true">{% icon "grip" %}</span>{% endif %}
+      <input type="hidden" name="order" value="{{ name.pk }}"><span class="handle" title="Drag to reorder" aria-hidden="true">{% icon "grip" %}</span>
       <span class="mono {{ name.key|tint }}" aria-hidden="true">{{ name.text|first|upper }}</span>
       <details class="kept-body">
         <summary>
@@ -18,10 +18,8 @@
         <div class="variants">Also written:
           {% for variant in name.variants %}
           <span class="variant">{{ variant }}
-            {% if is_parent %}
             <button class="z-button z-button-text z-button-xsmall" type="button" name="variant" value="{{ variant }}" hx-post="{% url 'official' token name.pk %}" hx-target="#shortlist" hx-swap="outerHTML">Use this spelling</button>
             <button class="z-button z-button-text z-button-xsmall" type="button" name="variant" value="{{ variant }}" hx-post="{% url 'split' token name.pk %}" hx-target="#shortlist" hx-swap="outerHTML">It's a different name</button>
-            {% endif %}
           </span>
           {% endfor %}
         </div>
@@ -38,9 +36,7 @@
     </li>
     {% endfor %}
   </ol>
-  {% elif is_parent %}
-  <div class="empty">{% icon "heart" %}<p>Names you keep land here.</p></div>
   {% else %}
-  <div class="empty">{% icon "heart" %}<p>No names yet. Suggest the first.</p></div>
+  <div class="empty">{% icon "heart" %}<p>Names you keep land here.</p></div>
   {% endif %}
 </section>

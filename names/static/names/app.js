@@ -188,13 +188,25 @@ document.addEventListener("click", (event) => {
   else copy(button);
 });
 
+const IDEA_SENT_MS = 1000;
+const IDEA_LEAVE_MS = 250;
+
+// The full message can be off screen, so the row itself says it worked before it goes.
+function ideaSent(button) {
+  const row = button.closest("li");
+  button.disabled = true;
+  row.classList.add("is-sent");
+  setTimeout(() => row.classList.add("is-leaving"), IDEA_SENT_MS);
+  setTimeout(() => row.remove(), IDEA_SENT_MS + IDEA_LEAVE_MS);
+}
+
 document.body.addEventListener("htmx:responseError", (event) => {
   const { xhr } = event.detail;
   toast(errorMessage(xhr.getResponseHeader("Content-Type"), xhr.responseText));
 });
 document.body.addEventListener("htmx:sendError", () => toast("Couldn't reach the server. Check your connection."));
 document.body.addEventListener("htmx:afterRequest", (event) => {
-  if (event.detail.successful && event.target.matches("[data-idea]")) event.target.closest("li").remove();
+  if (event.detail.successful && event.target.matches("[data-idea]")) ideaSent(event.target);
   if (event.detail.successful && event.target.matches("[data-reset-on-add]")) {
     event.target.querySelector("[name=text]").value = "";
   }

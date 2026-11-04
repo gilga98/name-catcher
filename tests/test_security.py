@@ -73,7 +73,7 @@ def ai(monkeypatch):
     return fake
 
 
-# A guest sees what the shortlist shows, however they ask
+# A guest sees no names on the board, however they ask
 
 
 @pytest.fixture
@@ -97,11 +97,34 @@ def test_a_guest_cannot_reach_a_binned_name(binned, route, method, data):
     assert "Binnedname" not in response.content.decode()
 
 
+@pytest.mark.parametrize(
+    ("route", "method", "data"),
+    [("details", "post", {}), ("merge", "post", {"text": "Tara"}), ("vote", "post", {}), ("audio", "get", {})],
+)
+def test_a_guest_cannot_reach_a_kept_name(route, method, data):
+    user, _ = parent()
+    board = services.create_board(user, {})
+    name = Name.objects.create(board=board, text="Tara", key="tara", respelling="T", status=Name.Status.KEPT)
+    response = getattr(Client(), method)(reverse(route, args=[board.guest_token, name.pk]), data)
+    assert response.status_code == 404
+    assert "Tara" not in Client().get(reverse("board", args=[board.guest_token])).content.decode()
+
+
 def test_a_guest_cannot_reach_a_name_still_in_review():
     user, _ = parent()
     board = services.create_board(user, {})
     name = Name.objects.create(board=board, text="Tara", key="tara", respelling="T")
     assert Client().post(reverse("details", args=[board.guest_token, name.pk])).status_code == 404
+
+
+def test_the_duplicate_prompt_does_not_give_away_a_kept_name():
+    user, _ = parent()
+    board = services.create_board(user, {})
+    Name.objects.create(board=board, text="Tara", key="tara", status=Name.Status.KEPT)
+    response = Client().post(reverse("add", args=[board.guest_token]), {"text": "Tara"})
+    assert "Thanks" in response.content.decode()
+    assert "same name" not in response.content.decode()
+    assert 'id="shortlist"' not in response.content.decode()
 
 
 def test_the_duplicate_prompt_does_not_give_away_a_hidden_name(binned):
@@ -257,11 +280,12 @@ def test_ideas_relatives_read_are_not_built_from_anything_private(ai):
     voter = services.Voter(id=accounts.voter_id(user), name="P", is_parent=True)
     binned_name = Name.objects.create(board=board, text="Binnedname", key="binedname", respelling="B")
     services.pass_on(binned_name, voter)
+    Name.objects.create(board=board, text="Keptname", key="keptname", status=Name.Status.KEPT)
     Client().post(reverse("add", args=[board.guest_token]), {"text": "Copyallprivatenotes", "by": "Aunt"})
     services.fetch_family_ideas(board)
     request = ai.requests[0]
     assert request.brief == {"style": "classic"}
-    assert request.passed == [] and request.family_suggested == []
+    assert request.liked == [] and request.passed == [] and request.family_suggested == []
     assert "Private note" not in str(request) and "Binnedname" not in str(request)
     assert "Copyallprivatenotes" not in str(request)
 
@@ -293,41 +317,40 @@ def test_one_account_can_only_make_so_many_boards():
 
 @override_settings(JOBS_EAGER=False, AI_RATE_GLOBAL="3/h", AI_RATE_PER_BOARD="1/h")
 def test_one_board_cannot_use_up_the_sitewide_ai_budget():
-    user, _ = parent()
+    user, client = parent()
     evil = services.create_board(user, {})
     names = [
         Name.objects.create(board=evil, text=text, key=text.lower(), status=Name.Status.KEPT)
         for text in ("Tara", "Meera", "Nila", "Kavya", "Rohan", "Isha")
     ]
-    guest = Client(REMOTE_ADDR="203.0.113.1")
     for name in names:
-        guest.get(reverse("audio", args=[evil.guest_token, name.pk]))
+        client.get(reverse("audio", args=[evil.parent_token, name.pk]), REMOTE_ADDR="203.0.113.1")
     family = services.create_board(user, {})
     theirs = Name.objects.create(board=family, text="Mira", key="mira", status=Name.Status.KEPT)
-    url = reverse("audio", args=[family.guest_token, theirs.pk])
-    assert Client(REMOTE_ADDR="203.0.113.2").get(url).status_code == 202
+    url = reverse("audio", args=[family.parent_token, theirs.pk])
+    assert client.get(url, REMOTE_ADDR="203.0.113.2").status_code == 202
 
 
 @override_settings(JOBS_EAGER=False, AI_RATE_PER_IP="2/h", AI_RATE_PER_BOARD="100/h", AI_RATE_GLOBAL="100/h")
 def test_one_visitor_has_their_own_ai_limit():
-    user, _ = parent()
+    user, client = parent()
     board = services.create_board(user, {})
     names = [
         Name.objects.create(board=board, text=text, key=text.lower(), status=Name.Status.KEPT)
         for text in ("Tara", "Meera", "Nila")
     ]
-    guest = Client(REMOTE_ADDR="203.0.113.1")
-    codes = [guest.get(reverse("audio", args=[board.guest_token, name.pk])).status_code for name in names]
+    urls = [reverse("audio", args=[board.parent_token, name.pk]) for name in names]
+    codes = [client.get(url, REMOTE_ADDR="203.0.113.1").status_code for url in urls]
     assert codes == [202, 202, 429]
 
 
 @override_settings(JOBS_EAGER=False, AI_RATE_PER_BOARD="2/h")
 def test_waiting_for_a_recording_spends_nothing():
-    user, _ = parent()
+    user, client = parent()
     board = services.create_board(user, {})
     name = Name.objects.create(board=board, text="Tara", key="tara", status=Name.Status.KEPT)
-    url = reverse("audio", args=[board.guest_token, name.pk])
-    assert {Client().get(url).status_code for _ in range(20)} == {202}
+    url = reverse("audio", args=[board.parent_token, name.pk])
+    assert {client.get(url).status_code for _ in range(20)} == {202}
     assert Job.objects.filter(kind="speak").count() == 1
 
 
@@ -337,7 +360,7 @@ def test_clearing_cookies_cannot_stuff_votes():
     board = services.create_board(user, {})
     name = Name.objects.create(board=board, text="Tara", key="tara", status=Name.Status.KEPT)
     for _ in range(20):
-        Client().post(reverse("vote", args=[board.guest_token, name.pk]))
+        Client().post(reverse("add", args=[board.guest_token]), {"text": "Tara"})
     assert Vote.objects.filter(name=name).count() == 5
 
 
@@ -356,11 +379,10 @@ def test_a_returning_guest_keeps_their_vote():
     board = services.create_board(user, {})
     name = Name.objects.create(board=board, text="Tara", key="tara", status=Name.Status.KEPT)
     guest = Client()
-    url = reverse("vote", args=[board.guest_token, name.pk])
-    guest.post(url)
-    voter = Vote.objects.get(name=name).voter
-    guest.post(url)  # A second press takes it back, so this has to be the same voter.
-    assert voter and not Vote.objects.filter(name=name).exists()
+    url = reverse("add", args=[board.guest_token])
+    guest.post(url, {"text": "Tara"})
+    guest.post(url, {"text": "Tara"})  # Suggesting it again has to count as the same voter.
+    assert Vote.objects.get(name=name).voter
 
 
 @override_settings(BOARD_RATE_PER_IP="3/m")

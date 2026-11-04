@@ -66,13 +66,13 @@
       <article class="invite tint-1">
         <span class="invite-mark">{% icon "people" %}</span>
         <h3>Your family</h3>
-        <p>Anyone with this link can vote and suggest names, without an account.</p>
+        <p>Anyone with this link can suggest names, without an account.</p>
         <div class="share">
           <input class="z-input" id="guest-link" readonly value="{{ guest_url }}" aria-label="Family link">
           <button class="z-button z-button-primary" type="button" data-copy="#guest-link">{% icon "copy" %}<span data-label>Copy link</span></button>
           <button class="z-button z-button-default" type="button" data-share="#guest-link" hidden>{% icon "share" %}<span>Share</span></button>
         </div>
-        <p class="hint">{% icon "eye" %}They see your description if you chose to share it. Their suggestions join your deck.</p>
+        <p class="hint">{% icon "eye" %}They never see your shortlist. They see your description if you chose to share it. Their suggestions join your deck.</p>
         <button class="text-button" type="button" hx-post="{% url 'reset_family_link' token %}" hx-confirm="The current family link will stop working. Make a new one?">Make a new family link</button>
       </article>
     </section>
@@ -125,9 +125,6 @@
     {% if wishes.notes %}<blockquote class="wishes">{{ wishes.notes }}</blockquote>{% endif %}
     {% if wishes.tags %}<ul class="tags" aria-label="What the parents are hoping for">{% for tag in wishes.tags %}<li>{{ tag }}</li>{% endfor %}</ul>{% endif %}
   </header>
-  <div class="guest-main">
-    {% include "names/partials/shortlist.html" %}
-  </div>
   <div class="guest-side">
     <section class="tile">
       <h2>Tap to suggest</h2>

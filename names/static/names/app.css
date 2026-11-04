@@ -315,7 +315,6 @@ main form.tune-form .step-q, .tune-form .field legend.step-q { font-size: 1.25re
 .vote[aria-pressed="true"] { background: var(--love); color: var(--paper); }
 .vote[aria-pressed="true"] .icon { fill: currentColor; }
 .kept-status { flex-basis: 100%; padding-left: 4.625rem; }
-.guest .kept-status { padding-left: 3.5rem; }
 .variants { font-size: .875rem; color: var(--mauve); margin-top: .5rem; }
 .variant { display: block; color: var(--ink); }
 
@@ -378,13 +377,26 @@ main form.tune-form .step-q, .tune-form .field legend.step-q { font-size: 1.25re
 .wishes { font-family: var(--serif); font-size: 1.125rem; line-height: 1.4; margin: 0; max-width: 34rem; }
 .guest-head .tags { justify-content: center; margin: 0; }
 .guest-head .tags li { background: rgb(255 255 255 / .16); color: #fff; }
-.guest-main, .guest-side { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; align-content: start; }
-.guest-main .shortlist > h2 { padding-left: .25rem; }
+.guest-side { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; align-content: start; }
 .ideas { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: .5rem; }
 .idea { display: flex; align-items: center; gap: .75rem; width: 100%; text-align: left; padding: .5rem .875rem .5rem .5rem; border: 0; border-radius: 1.125rem; background: var(--oat); color: var(--ink); font: inherit; cursor: pointer; }
 .idea:hover { background: var(--petal); }
-.idea > .icon { color: var(--plum); }
+.idea:disabled { cursor: default; }
+.idea.htmx-request, .is-sent .idea { background: var(--petal); }
+.idea-mark { flex: none; display: grid; place-items: center; color: var(--plum); }
+.idea-mark > * { grid-area: 1 / 1; }
+.idea-spinner { width: 1.125rem; height: 1.125rem; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.idea-mark .icon:last-child, .idea-spinner { visibility: hidden; }
+.idea.htmx-request .idea-spinner, .is-sent .idea-mark .icon:last-child { visibility: visible; }
+.idea.htmx-request .idea-mark .icon:first-child, .is-sent .idea-mark .icon:first-child, .is-sent .idea-spinner { visibility: hidden; }
+.ideas li { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .25s ease, margin-bottom .25s ease, opacity .25s ease; }
+.ideas li > .idea { min-height: 0; overflow: hidden; }
+.ideas li.is-leaving { grid-template-rows: 0fr; margin-bottom: -.5rem; opacity: 0; }
 .idea-text { flex: 1; min-width: 0; }
+.idea-text .idea-sent { display: none; color: var(--plum); }
+.is-sent .idea-text .idea-sent { display: block; }
+.is-sent .idea-text .idea-meaning { display: none; }
 .idea strong { display: block; font-family: var(--serif); font-size: 1.25rem; font-weight: 400; line-height: 1.2; }
 .idea-text span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: .8125rem; color: var(--mauve); }
 
@@ -480,8 +492,7 @@ span.htmx-request.htmx-indicator { display: inline; margin-left: .75rem; }
   .tile-half { grid-column: span 6; }
   .tile-wide { grid-column: span 8; }
   .tile-narrow { grid-column: span 4; }
-  .guest { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
-  .guest-head { grid-column: 1 / -1; }
+  .guest-side { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
 }
 
 /* There's room for the deck and shortlist together, so the shortlist stops being its own tab. */

@@ -162,18 +162,29 @@ def test_keep_moves_a_name_to_the_shortlist_and_pass_hides_it(parent, guest, boa
     kept, passed = board.names.all()[:2]
     post(parent, "keep", kept.pk)
     post(parent, "pass", passed.pk)
+    assert kept.text in page(parent).content.decode()
     html = page(guest).content.decode()
-    assert kept.text in html
+    assert kept.text not in html
     assert passed.text not in html
 
 
-def test_guest_duplicate_asks_before_merging(guest, board):
+def test_parent_duplicate_asks_before_merging(parent, board):
     existing = Name.objects.create(board=board, text="Aarav", key="arav", status=Name.Status.KEPT)
-    response = post(guest, "add", text="आरव")
+    response = post(parent, "add", text="आरव")
     assert "the same name as" in response.content.decode()
     assert board.names.count() == 1
 
-    post(guest, "merge", existing.pk, text="आरव")
+    post(parent, "merge", existing.pk, text="आरव")
+    existing.refresh_from_db()
+    assert existing.variants == ["आरव"]
+    assert existing.votes.count() == 1
+
+
+def test_guest_duplicate_joins_without_asking(guest, board):
+    existing = Name.objects.create(board=board, text="Aarav", key="arav", status=Name.Status.KEPT)
+    response = post(guest, "add", text="आरव")
+    assert "the same name as" not in response.content.decode()
+    assert board.names.count() == 1
     existing.refresh_from_db()
     assert existing.variants == ["आरव"]
     assert existing.votes.count() == 1
@@ -229,10 +240,10 @@ def test_two_parents_voting_are_recognised(board):
     assert "You both love this" in page(first).content.decode()
 
 
-def test_vote_toggles(guest, board):
+def test_vote_toggles(parent, board):
     name = Name.objects.create(board=board, text="Tara", key="tara", status=Name.Status.KEPT)
-    post(guest, "vote", name.pk)
-    post(guest, "vote", name.pk)
+    post(parent, "vote", name.pk)
+    post(parent, "vote", name.pk)
     assert name.votes.count() == 0
 
 
@@ -258,9 +269,9 @@ def test_ranking_saves_the_new_order(parent, board):
     assert list(board.names.values_list("text", flat=True)) == ["B", "A"]
 
 
-def test_audio_is_generated_once_then_served_from_the_database(guest, board):
+def test_audio_is_generated_once_then_served_from_the_database(parent, board):
     name = Name.objects.create(board=board, text="Tara", key="tara", status=Name.Status.KEPT)
-    client, token = guest
+    client, token = parent
     response = client.get(reverse("audio", args=[token, name.pk]))
     assert response["Content-Type"] == "audio/wav"
     name.refresh_from_db()

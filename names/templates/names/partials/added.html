@@ -1,2 +1,2 @@
 <p class="z-alert" role="status">{{ message }}</p>
-{% include "names/partials/shortlist.html" %}
+{% if is_parent %}{% include "names/partials/shortlist.html" %}{% endif %}

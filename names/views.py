@@ -72,7 +72,7 @@ def _voter(request: HttpRequest, is_parent: bool) -> Voter:
 
 
 def _admit_guest(request: HttpRequest) -> None:
-    """A relative gets an identity on their first vote or suggestion, so just reading a board stores nothing.
+    """A relative gets an identity on their first suggestion, so just reading a board stores nothing.
 
     Clearing cookies makes a new voter, so this also limits how many votes one address can invent.
     """
@@ -118,14 +118,8 @@ def with_board(*, parent_only: bool = False):
     return decorator
 
 
-def _visible(request: HttpRequest, name: Name) -> Name:
-    if not services.can_see(name, request.voter):
-        raise Http404
-    return name
-
-
 def _name(request: HttpRequest, pk: int) -> Name:
-    return _visible(request, get_object_or_404(request.board.names.defer("audio"), pk=pk))
+    return get_object_or_404(request.board.names.defer("audio"), pk=pk)
 
 
 def _context(request: HttpRequest, **extra) -> dict:
@@ -438,9 +432,8 @@ def family_ideas(request: HttpRequest, token: str) -> HttpResponse:
 
 
 @require_POST
-@with_board()
+@with_board(parent_only=True)
 def vote_name(request: HttpRequest, token: str, pk: int) -> HttpResponse:
-    _admit_guest(request)
     services.toggle_vote(_name(request, pk), request.voter)
     return _shortlist(request)
 
@@ -485,13 +478,12 @@ def _added(request: HttpRequest, name: Name | None, text: str) -> HttpResponse:
 
 
 @require_POST
-@with_board()
+@with_board(parent_only=True)
 def merge_name(request: HttpRequest, token: str, pk: int) -> HttpResponse:
     name = _name(request, pk)
     form = AddNameForm(request.POST)
     if not form.is_valid():
         return HttpResponse(NOT_A_NAME, status=422, content_type="text/plain")
-    _admit_guest(request)
     if not services.merge_into(name, form.cleaned_data["text"], request.voter):
         return HttpResponse(DIFFERENT_NAME, status=422, content_type="text/plain")
     context = _context(
@@ -527,7 +519,7 @@ def name_number(request: HttpRequest, token: str, pk: int) -> HttpResponse:
 
 
 @require_POST
-@with_board()
+@with_board(parent_only=True)
 def name_details(request: HttpRequest, token: str, pk: int) -> HttpResponse:
     name = _name(request, pk)
     state = services.describe_name(name)
@@ -536,9 +528,9 @@ def name_details(request: HttpRequest, token: str, pk: int) -> HttpResponse:
 
 
 @require_GET
-@with_board()
+@with_board(parent_only=True)
 def name_audio(request: HttpRequest, token: str, pk: int) -> HttpResponse:
-    name = _visible(request, get_object_or_404(request.board.names, pk=pk))
+    name = get_object_or_404(request.board.names, pk=pk)
     audio = services.cached_audio(name)
     if audio is None:
         if not services.speech_underway(name):  # Asking again while it records costs nothing, so it spends nothing.

@@ -214,10 +214,8 @@ def _family_request(board: Board) -> SuggestionRequest:
     brief = brief_for_llm(board.brief)
     if not board.brief.get("share_notes"):
         brief.pop("notes", None)
-    kept = board.names.filter(status=Name.Status.KEPT).prefetch_related("swipes").defer("audio")
     return SuggestionRequest(
         brief=brief,
-        liked=[n.text for n in kept if all(swipe.liked for swipe in n.swipes.all())][:30],
         overused=catalog.overused_names(),
         genres=catalog.genre_names(),
     )
@@ -296,8 +294,8 @@ def add_name(board: Board, text: str, voter: Voter, *, force: bool = False) -> A
     """Local and instant. describe_name fills in the details afterwards, so nobody waits on the LLM."""
     key = catalog.canonical_key(text)
     duplicate = None if force else find_duplicate(text, board.names.defer("audio"), key=key)
-    if duplicate and not can_see(duplicate, voter):
-        # "Is this the same as...?" would give away a name they can't see, so their support joins it without asking.
+    if duplicate and not voter.is_parent:
+        # "Is this the same as...?" would give away what's on the board, so their support joins it without asking.
         merge_into(duplicate, text, voter)
         return AddResult(hidden_duplicate=True)
     if duplicate:
@@ -544,21 +542,12 @@ def record_audio(name: Name) -> None:
     name.save(update_fields=["audio"])
 
 
-def _visible_on_shortlist(name: Name, voter: Voter) -> bool:
-    """Parents see everything either of them kept. Family don't see names a parent passed on."""
-    return voter.is_parent or all(swipe.liked for swipe in name.swipes.all())
-
-
-def can_see(name: Name, voter: Voter) -> bool:
-    """Family reach only what their shortlist shows, however they ask: the deck and the bin stay with the parents."""
-    return voter.is_parent or (name.status == Name.Status.KEPT and _visible_on_shortlist(name, voter))
-
-
 def shortlist(board: Board, voter: Voter) -> list[Name]:
-    kept = board.names.filter(status=Name.Status.KEPT).prefetch_related("votes", "swipes").defer("audio")
-    names = [name for name in kept if _visible_on_shortlist(name, voter)]
-    if voter.is_parent:
-        with_partner_notes(names, board, voter)
+    """Parents see everything either of them kept. Family only suggest, so they see none of it."""
+    if not voter.is_parent:
+        return []
+    names = list(board.names.filter(status=Name.Status.KEPT).prefetch_related("votes", "swipes").defer("audio"))
+    with_partner_notes(names, board, voter)
     for name in names:
         name.mine = any(vote.voter == voter.id for vote in name.votes.all())
         name.split = len({swipe.liked for swipe in name.swipes.all()}) == 2

@@ -200,7 +200,7 @@ Each parent swipes, and sees the other's decision on the card. Browsers check fo
 |---|---|---|
 | Keep | Keep | Shortlist, "You both love this" |
 | Keep | Not yet | On both shortlists, in B's deck marked "A kept this" |
-| Keep | Pass | Shortlist for both as "Talk about this one", hidden from family |
+| Keep | Pass | Shortlist for both as "Talk about this one" |
 | Pass | Not yet | In B's deck marked "A passed on this" |
 | Pass | Pass | Bin, and can be brought back |
 
