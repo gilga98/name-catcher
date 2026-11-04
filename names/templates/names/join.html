@@ -1,11 +1,13 @@
 {% extends "names/base.html" %}
 {% block content %}
-<header class="hero hero-small">
-  <h1>Join the naming board{% if surname %} for baby {{ surname }}{% endif %}</h1>
-  <p>You'll be able to review names, keep favourites and vote as a parent.</p>
-</header>
-<form method="post" class="section">
-  {% csrf_token %}
-  <button class="z-button z-button-primary z-button-large" type="submit">Join this board</button>
-</form>
+<div class="bento">
+  <header class="tile tile-hero">
+    <h1>Join the naming board{% if surname %} for baby {{ surname }}{% endif %}</h1>
+    <p>You'll be able to review names, keep favourites and vote as a parent.</p>
+  </header>
+  <form method="post" class="tile tile-join">
+    {% csrf_token %}
+    <button class="z-button z-button-primary z-button-large" type="submit">Join this board</button>
+  </form>
+</div>
 {% endblock %}

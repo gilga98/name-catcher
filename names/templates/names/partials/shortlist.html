@@ -1,4 +1,4 @@
-<section id="shortlist" class="section"{% if oob %} hx-swap-oob="true"{% endif %}>
+<section id="shortlist" class="tile tile-shortlist"{% if oob %} hx-swap-oob="true"{% endif %}>
   <h2>Shortlist</h2>
   {% if shortlist %}
   <ol class="kept-list"{% if is_parent %} data-z-sortable="handle: .handle" hx-post="{% url 'rank' token %}" hx-trigger="moved" hx-include="this" hx-swap="none"{% endif %}>
@@ -8,7 +8,7 @@
       <div class="kept-body">
         <h3 class="name name-small">{{ name.text }}{% if surname %} <span class="surname">{{ surname }}</span>{% endif %}</h3>
         {% include "names/partials/name_details.html" %}
-        {% if name.both_parents_love %}<p class="z-badge both">You both love this</p>{% endif %}
+        {% if name.split %}<p class="z-badge split">Talk about this one: one of you passed</p>{% elif name.both_parents_love %}<p class="z-badge both">You both love this</p>{% endif %}
         {% if name.variants %}
         <div class="variants">Also written:
           {% for variant in name.variants %}
@@ -27,7 +27,7 @@
     {% endfor %}
   </ol>
   {% elif is_parent %}
-  <p class="hint">Names you keep land here. Share the family link once you have a few.</p>
+  <p class="hint">Names you swipe right land here. Share the family link once you have a few.</p>
   {% else %}
   <p class="hint">The parents haven't kept any names yet. Suggest one below.</p>
   {% endif %}

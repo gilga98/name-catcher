@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex">
+  <meta name="robots" content="{% block robots %}noindex{% endblock %}">
   <meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false}'>
   <title>{% block title %}{% block head_title %}{% endblock %} Naamadeva{% endblock %}</title>
   <link rel="icon" href="{% static 'names/bloom.svg' %}">
@@ -15,16 +15,36 @@
   <script src="https://cdn.jsdelivr.net/gh/0builddotdev/0build@0.6.13/dist/js/uikit.min.js" integrity="sha384-2AZCsdmvj4npIcen/Pv7TV9F1lXpKBA1WDKnPtr7ln72FrycFJD5ZGVS9sNiZWgh" crossorigin="anonymous" defer></script>
   <script src="{% static 'django_htmx/htmx-2.min.js' %}" defer></script>
   <script src="{% static 'names/app.js' %}" defer></script>
+  {% block scripts %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
   <main class="page">
-    <a class="wordmark" href="{% url 'home' %}"><img src="{% static 'names/bloom.svg' %}" alt="" width="24" height="24">Naamadeva</a>
-    <nav class="account" aria-label="Account">
-      {% if user.is_authenticated %}<a href="{% url 'account_logout' %}">Sign out</a>
-      {% elif not is_guest %}<a href="{% url 'account_login' %}">Sign in</a>{% endif %}
-    </nav>
+    <header class="topbar">
+      <a class="wordmark" href="{% url 'home' %}"><img src="{% static 'names/bloom.svg' %}" alt="" width="24" height="24">Naamadeva</a>
+      <nav class="account" aria-label="Account">
+        {% if user.is_authenticated %}
+        <a href="{% url 'dashboard' %}">Dashboard</a>
+        <a href="{% url 'account_settings' %}">Settings</a>
+        {% if user.is_staff %}<a href="{% url 'admin:index' %}">Admin</a>{% endif %}
+        <a href="{% url 'account_logout' %}">Sign out</a>
+        {% elif not is_guest %}<a href="{% url 'account_login' %}">Sign in</a>{% endif %}
+      </nav>
+    </header>
     {% for message in messages %}<p class="z-alert" role="status">{{ message }}</p>{% endfor %}
     {% block content %}{% endblock %}
+    <footer class="legal-footer">
+      <nav aria-label="Legal">
+        <a href="{% url 'privacy' %}">Privacy</a>
+        <a href="{% url 'terms' %}">Terms</a>
+        <a href="{% url 'cookies' %}">Cookies</a>
+        <a href="{% url 'disclaimer' %}">Disclaimer</a>
+        <a href="{% url 'grievance' %}">Grievances</a>
+      </nav>
+    </footer>
   </main>
+  <aside class="cookie-notice" id="cookie-notice" hidden>
+    <p>We only use cookies that keep you signed in and keep forms secure. <a href="{% url 'cookies' %}">Read the cookie policy</a></p>
+    <button class="z-button z-button-default z-button-small" type="button" data-dismiss-cookies>Got it</button>
+  </aside>
 </body>
 </html>

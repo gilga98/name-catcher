@@ -1,0 +1,20 @@
+{% extends "names/legal/base.html" %}
+{% block title %}Cookie Policy Naamadeva{% endblock %}
+{% block heading %}Cookie Policy{% endblock %}
+{% block legal %}
+<p>We only use what the service needs to work. We don't use advertising or analytics cookies, so there's nothing to opt in to. If that changes, we'll ask you first.</p>
+<table>
+  <thead><tr><th scope="col">Name</th><th scope="col">What it's for</th><th scope="col">How long it lasts</th></tr></thead>
+  <tbody>
+    <tr><td><code>sessionid</code></td><td>Keeps you signed in, remembers your brief while you sign up, and remembers a family member's name and votes</td><td>Up to 2 weeks</td></tr>
+    <tr><td><code>csrftoken</code></td><td>Protects forms against forgery</td><td>Up to 1 year</td></tr>
+    <tr><td><code>messages</code></td><td>Carries one-time confirmations to the next page</td><td>Until the browser closes</td></tr>
+    <tr><td><code>cookie-notice-seen</code> (stored in your browser, not a cookie)</td><td>Stops the cookie notice appearing again</td><td>Until you clear it</td></tr>
+    <tr><td><code>baby-photo-…</code> (stored in your browser, not a cookie)</td><td>Shows a photo you chose on this device. We never receive it</td><td>Until you remove it</td></tr>
+  </tbody>
+</table>
+<h2>Third parties</h2>
+<p>Pages load some styles and fonts from jsDelivr, which receives your IP address when your browser asks for them, and sets no cookies for us. If you use "Continue with Google", Google's own cookies apply on Google's pages.</p>
+<h2>Your choices</h2>
+<p>You can clear or block cookies in your browser. Blocking them will stop sign-in and forms from working. Your browser also caches our catalogue so that it can suggest names without asking our servers each time. Clearing your browser's cache removes it.</p>
+{% endblock %}

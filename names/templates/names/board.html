@@ -1,41 +1,83 @@
 {% extends "names/base.html" %}
+{% load static %}
 {% block title %}{% if surname %}{{ surname }} baby names{% else %}Baby names{% endif %}{% endblock %}
+{% block scripts %}{% if is_parent %}<script src="{% static 'names/engine.js' %}" defer></script><script src="{% static 'names/deck.js' %}" defer></script>{% endif %}{% endblock %}
 {% block content %}
+<div class="bento">
 {% if is_parent %}
-<header class="hero hero-small">
-  <h1>Names for baby{% if surname %} {{ surname }}{% endif %}</h1>
+<header class="tile tile-hero tile-hero-small">
+  <div class="baby-row">
+    {% include "names/partials/baby_avatar.html" %}
+    <h1>Names for {{ baby }}</h1>
+  </div>
+  <p class="photo-controls">
+    <label class="photo-button">Use your own photo<input type="file" accept="image/*" id="baby-photo-input" data-board="{{ board.pk }}"></label>
+    <button class="photo-button" type="button" id="baby-photo-remove" data-board="{{ board.pk }}" hidden>Remove photo</button>
+    <span>It stays on this device and is never uploaded.</span>
+  </p>
   <details class="brief">
     <summary>Change what you're looking for</summary>
     <form method="post" action="{% url 'brief' token %}">
       {% csrf_token %}
-      {% include "names/partials/brief_fields.html" with form=brief_form %}
-      <button class="z-button z-button-primary" type="submit">Save changes</button>
+      <div class="brief-grid">{% include "names/partials/brief_fields.html" with form=brief_form %}</div>
+      <button class="z-button z-button-default" type="submit">Save changes</button>
     </form>
   </details>
 </header>
-<section class="section">
-  <h2>To review</h2>
-  <div id="review">{% include "names/partials/review_cards.html" %}</div>
+<section class="tile tile-review" aria-labelledby="deck-title">
+  <div class="deck-head">
+    <h2 id="deck-title">Names for {{ baby }} to try on</h2>
+    <button class="z-button z-button-text z-button-small" type="button" id="undo-swipe" hidden>Undo</button>
+  </div>
+  <p class="hint deck-hint">Swipe right to keep, left to pass, or use the buttons or arrow keys. Your partner can't see your choices until they've made theirs. A name is only binned if you both pass.</p>
+  {{ engine|json_script:"engine-data" }}
+  <div id="review" class="deck">{% include "names/partials/review_cards.html" %}</div>
+  <p id="deck-empty" class="hint" hidden>You've been through every name for now.</p>
+  <p id="deck-status" class="visually-hidden" role="status"></p>
   <p id="thinking" class="thinking htmx-indicator" role="status"><span data-z-spinner="ratio: 0.6"></span> Finding names for you…</p>
-  <button class="z-button z-button-default" type="button" hx-disabled-elt="this" hx-post="{% url 'suggest' token %}" hx-target="#review" hx-swap="beforeend" hx-indicator="#thinking"{% if is_new %} hx-trigger="load, click"{% endif %}>Suggest more names</button>
+  <p id="catalog-empty" class="hint" hidden>{% if engine.aiAllowed %}That's every match in our catalogue for now. AI can look further, using one of your monthly requests.{% else %}That's every match in our catalogue for now. AI is switched off in your settings, so try widening what you're looking for.{% endif %}</p>
+  <div class="actions"
+       id="suggest-actions"
+       data-shard-url="{% url 'catalog_shard' token %}?v={{ catalog_version }}"
+       data-pick-url="{% url 'suggest_from_catalog' token %}"
+       data-is-new="{{ is_new|yesno:'true,false' }}">
+    <button class="z-button z-button-default" type="button" id="suggest-local">Suggest more names</button>
+    {% if engine.aiAllowed %}<button class="z-button z-button-text" type="button" id="suggest-ai" hidden hx-disabled-elt="this" hx-post="{% url 'suggest' token %}" hx-target="#review" hx-swap="beforeend" hx-indicator="#thinking">Ask AI for rarer names</button>{% endif %}
+  </div>
 </section>
 {% else %}
-<header class="hero hero-small">
-  <h1>Help name baby{% if surname %} {{ surname }}{% endif %}</h1>
+<header class="tile tile-hero tile-hero-small">
+  <div class="baby-row">
+    {% include "names/partials/baby_avatar.html" %}
+    <h1>Help name {{ baby }}</h1>
+  </div>
   <p>Love the names you like, or suggest your own. No sign-up needed.</p>
 </header>
+{% if wishes.notes or wishes.tags %}
+<section class="tile tile-wishes">
+  <h2>What the parents are hoping for</h2>
+  {% if wishes.notes %}<blockquote class="wishes">{{ wishes.notes }}</blockquote>{% endif %}
+  {% if wishes.tags %}<ul class="tags">{% for tag in wishes.tags %}<li>{{ tag }}</li>{% endfor %}</ul>{% endif %}
+</section>
+{% endif %}
+<section class="tile tile-ideas">
+  <h2>Tap to suggest</h2>
+  <p class="hint">Ideas that fit what the parents want. Tap any you like.</p>
+  <div hx-post="{% url 'family_ideas' token %}" hx-trigger="load" hx-swap="innerHTML"><p class="thinking" role="status">Finding ideas…</p></div>
+</section>
 {% endif %}
 
 {% include "names/partials/shortlist.html" %}
 
-<section class="section">
-  <h2>{% if is_parent %}Add a name you already like{% else %}Suggest a name{% endif %}</h2>
+<section class="tile tile-add{% if not is_parent %} tile-add-family{% endif %}">
+  <h2>{% if is_parent %}Add a name you already like{% else %}Or suggest your own{% endif %}</h2>
   <form id="add-name" class="add-form" hx-post="{% url 'add' token %}" hx-target="#add-result" data-reset-on-add>
     <label class="z-form-label" for="add-text">Name, in any spelling or script</label>
     <input class="z-input" id="add-text" name="text" maxlength="40" required autocomplete="off">
     {% if not is_parent %}
     <label class="z-form-label" for="add-by">Your name</label>
     <input class="z-input" id="add-by" name="by" maxlength="40" value="{{ by }}" placeholder="So the parents know who suggested it">
+    <p class="hint">The parents see the name you enter here, and we tag your suggestion automatically. Read our <a href="{% url 'privacy' %}">Privacy Policy</a>.</p>
     {% endif %}
     <button class="z-button z-button-primary" type="submit">Add name</button>
   </form>
@@ -43,25 +85,39 @@
 </section>
 
 {% if is_parent %}
-<section class="section">
+<section class="tile tile-family">
   <h2>Ask your family</h2>
-  <p class="hint">Anyone with this link can vote and suggest names, without an account. You see their suggestions first.</p>
+  <p class="hint">Anyone with this link can vote and suggest names, without an account. They see your description if you chose to share it. Their suggestions join your deck.</p>
   <div class="share">
     <input class="z-input" id="guest-link" readonly value="{{ guest_url }}" aria-label="Family link">
     <button class="z-button z-button-default" type="button" data-copy="#guest-link">Copy link</button>
   </div>
   <button class="z-button z-button-text" type="button" hx-post="{% url 'reset_family_link' token %}" hx-confirm="The current family link will stop working. Make a new one?">Make a new family link</button>
 </section>
-<section class="section">
+<section class="tile tile-partner">
   <h2>Invite your partner</h2>
-  <p class="hint">They sign in with their own account and get the same access as you. This link works once.</p>
+  <p class="hint">They sign in with their own account and swipe through the same names. This link works once.</p>
   <div class="share">
     <input class="z-input" id="invite-link" readonly value="{{ invite_url }}" aria-label="Partner invite link">
     <button class="z-button z-button-default" type="button" data-copy="#invite-link">Copy link</button>
   </div>
 </section>
-<section class="section">
+<section class="tile tile-bin">
+  <h2>Bin</h2>
+  {% if binned %}
+  <p class="hint">Names you've both passed on.</p>
+  <ul class="bin-list">
+    {% for name in binned %}<li><span>{{ name.text }}</span> <button class="z-button z-button-text z-button-small" type="button" hx-post="{% url 'restore' token name.pk %}">Bring back</button></li>{% endfor %}
+  </ul>
+  {% else %}
+  <p class="hint">Names you've both passed on land here, in case you change your minds.</p>
+  {% endif %}
+</section>
+<section class="tile tile-danger">
+  <h2>Finished with this board?</h2>
+  <p class="hint">Deleting it removes every name and vote for everyone.</p>
   <button class="z-button z-button-danger" type="button" hx-post="{% url 'delete_board' token %}" hx-confirm="Delete this board and all its names and votes? This can't be undone.">Delete this board</button>
 </section>
 {% endif %}
+</div>
 {% endblock %}

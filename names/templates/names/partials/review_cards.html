@@ -1,12 +1,14 @@
 {% for name in queue %}
-<article class="name-card">
+<article class="name-card" data-undo-url="{% url 'undo' token name.pk %}">
+  <span class="stamp stamp-keep" aria-hidden="true">Keep</span>
+  <span class="stamp stamp-pass" aria-hidden="true">Pass</span>
   <h3 class="name">{{ name.text }}{% if surname %} <span class="surname">{{ surname }}</span>{% endif %}</h3>
   {% include "names/partials/name_details.html" %}
   {% if name.suggested_by %}<p class="meta">Suggested by {{ name.suggested_by }}.</p>{% endif %}
-  <div class="actions">
-    <button class="z-button z-button-primary" type="button" hx-post="{% url 'keep' token name.pk %}" hx-target="closest article" hx-swap="outerHTML">Keep</button>
-    <button class="z-button z-button-default" type="button" hx-post="{% url 'pass' token name.pk %}" hx-target="closest article" hx-swap="outerHTML">Pass</button>
-    <button class="z-button z-button-text" type="button" hx-post="{% url 'more' token name.pk %}" hx-target="#review" hx-swap="afterbegin" hx-indicator="#thinking">More like this</button>
+  <div class="actions card-actions">
+    <button class="z-button z-button-default" type="button" data-taste="passed" data-key="{{ name.key }}" hx-post="{% url 'pass' token name.pk %}" hx-target="closest article" hx-swap="outerHTML">Pass</button>
+    <button class="z-button z-button-primary" type="button" data-taste="liked" data-key="{{ name.key }}" hx-post="{% url 'keep' token name.pk %}" hx-target="closest article" hx-swap="outerHTML">Keep</button>
+    <button class="z-button z-button-text more" type="button" data-more-key="{{ name.key }}" data-more-url="{% url 'more' token name.pk %}">More like this</button>
   </div>
 </article>
 {% endfor %}

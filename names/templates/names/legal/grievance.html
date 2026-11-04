@@ -1,0 +1,16 @@
+{% extends "names/legal/base.html" %}
+{% block title %}Grievances Naamadeva{% endblock %}
+{% block heading %}Grievances and your rights{% endblock %}
+{% block legal %}
+<h2>Grievance Officer</h2>
+<p>{{ legal.officer }}<br>{{ legal.entity }}, {{ legal.address }}<br>Email: {{ legal.email }}</p>
+<p>This person also answers questions about how we process personal data.</p>
+<h2>What to include</h2>
+<p>Your account email, or the family link if you don't have an account, what happened, and what you'd like us to do. To report content, tell us where it appears.</p>
+<h2>What happens next</h2>
+<p>We acknowledge complaints within 24 hours and aim to resolve them within 15 days. Requests to remove content that's unlawful or harms someone's privacy or dignity are handled sooner where the law requires it.</p>
+<h2>Using your data rights</h2>
+<p>Most rights are available directly in <a href="{% url 'account_settings' %}">Settings</a>. For anything else, including naming a nominee, write to the address above. We may ask you to confirm your identity first.</p>
+<h2>If you're not satisfied</h2>
+<p>Once you have used this process, you may complain to the Data Protection Board of India under the Digital Personal Data Protection Act, 2023.</p>
+{% endblock %}

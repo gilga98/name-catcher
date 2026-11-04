@@ -1,0 +1,15 @@
+{% extends "admin/index.html" %}
+{% block content %}
+<div class="module" style="margin-bottom:1.5rem">
+  <h2>This month</h2>
+  <table style="width:100%">
+    <tr><th scope="row">Names waiting for review</th><td><a href="{% url 'admin:names_catalogname_changelist' %}?status__exact=pending">{{ overview.pending }}</a></td></tr>
+    <tr><th scope="row">Names live in the catalogue</th><td>{{ overview.approved }}</td></tr>
+    <tr><th scope="row">Suggestions served from the catalogue, not AI</th><td>{% if overview.catalog_share is None %}None yet{% else %}{{ overview.catalog_share }}%{% endif %}</td></tr>
+    <tr><th scope="row">AI requests</th><td>{{ overview.llm_calls }}{% for row in overview.llm_by_kind %} ({{ row.kind }}: {{ row.total }}){% endfor %}</td></tr>
+    <tr><th scope="row">Boards</th><td>{{ overview.boards }}</td></tr>
+  </table>
+  <p><a class="addlink" href="{% url 'admin:names_catalogname_upload' %}">Upload names</a></p>
+</div>
+{{ block.super }}
+{% endblock %}

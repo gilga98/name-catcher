@@ -1,0 +1,36 @@
+{% extends "names/base.html" %}
+{% block title %}Share names Naamadeva{% endblock %}
+{% block content %}
+<div class="bento">
+  <section class="tile tile-wide">
+    <h1 class="tile-title">Share names you know</h1>
+    <p class="hint">Every name is reviewed before other families see it. Please don't include real people's personal details, only names and their meanings.</p>
+    {% if result %}
+    <p class="z-alert" role="status">{{ result.created }} name{{ result.created|pluralize }} sent for review.{% if result.duplicates %} {{ result.duplicates }} we already had, and your agreement counts in their favour.{% endif %}</p>
+    {% for error in result.errors %}<p class="hint">{{ error }}</p>{% endfor %}
+    {% endif %}
+    <form method="post" enctype="multipart/form-data" class="contribute-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <p>{{ form.names.label_tag }}{{ form.names }}<span class="helptext">{{ form.names.help_text }}</span></p>
+      <p>{{ form.file.label_tag }}{{ form.file }}<span class="helptext">Use the columns name, meaning, origin, gender, genres. Separate genres with |. Up to 500 lines.</span></p>
+      <fieldset class="field"><legend class="z-form-label">Which genres fit all of these?</legend>
+        <div class="chips">{% for choice in form.genres %}<label class="chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
+      </fieldset>
+      <div class="field-row">
+        <p>{{ form.origin.label_tag }}{{ form.origin }}</p>
+        <p>{{ form.gender.label_tag }}{{ form.gender }}</p>
+      </div>
+      {{ form.rights.errors }}
+      <p>{{ form.rights.label_tag }}{{ form.rights }}</p>
+      <button class="z-button z-button-primary" type="submit">Send for review</button>
+    </form>
+  </section>
+  <section class="tile tile-narrow">
+    <h2>Your names</h2>
+    {% if mine %}
+    <ul class="link-list">{% for name in mine %}<li>{{ name.text }} <span class="meta">{{ name.get_status_display }}</span></li>{% endfor %}</ul>
+    {% else %}<p class="hint">Names you share show up here with their review status.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

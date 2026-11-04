@@ -1,0 +1,9 @@
+{% if ideas %}
+<ul class="ideas">
+  {% for idea in ideas %}
+  <li><button class="idea" type="button" data-idea name="text" value="{{ idea.text }}" hx-post="{% url 'add' token %}" hx-include="#add-by" hx-target="#add-result"><strong>{{ idea.text }}</strong>{% if idea.meaning %}<span>{{ idea.meaning }}</span>{% endif %}</button></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="hint">No ideas to tap right now. Type your own below.</p>
+{% endif %}

@@ -20,21 +20,31 @@ class NameIdea(BaseModel):
     origin: str
     respelling: str
     speech_lang: str
+    gender: str
+    rarity: str
+    style: str
+    genres: list[str]
+    insight: str
     surname_fit: str
 
 
 @dataclass(frozen=True)
 class SuggestionRequest:
+    """`brief` must come from `ai.context.brief_for_llm`, which decides what may leave our side."""
+
     brief: dict
     liked: list[str] = field(default_factory=list)
     passed: list[str] = field(default_factory=list)
     more_like: str = ""
+    overused: list[str] = field(default_factory=list)
+    genres: list[str] = field(default_factory=list)
+    family_suggested: list[str] = field(default_factory=list)
 
 
 class NameSuggester(Protocol):
     def suggest(self, request: SuggestionRequest) -> list[NameIdea]: ...
 
-    def describe(self, name: str, surname: str) -> NameIdea: ...
+    def describe(self, name: str, genres: list[str]) -> NameIdea: ...
 
 
 class Speaker(Protocol):

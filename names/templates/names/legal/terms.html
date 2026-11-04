@@ -1,0 +1,55 @@
+{% extends "names/legal/base.html" %}
+{% block title %}Terms of Use Naamadeva{% endblock %}
+{% block heading %}Terms of Use{% endblock %}
+{% block legal %}
+<p>These terms are an agreement between you and {{ legal.entity }} ("we"). They form an electronic record under the Information Technology Act, 2000. By creating an account or using a family link, you accept them. If you don't, please don't use Naamadeva.</p>
+
+<h2>Who can use Naamadeva</h2>
+<p>You must be 18 or older and able to enter a binding contract under Indian law. Keep your password safe. You're responsible for what happens under your account.</p>
+
+<h2>What the service does</h2>
+<p>Naamadeva helps families find and choose names, using a catalogue reviewed by people, contributions from users and, at times, AI. It's a tool to help you decide. The decision, and its consequences, are yours. Please read the <a href="{% url 'disclaimer' %}">Disclaimer</a>.</p>
+
+<h2>Family links and invites</h2>
+<p>Anyone holding your family link can see your shortlist, vote and suggest names. Share it only with people you trust, and replace it if it spreads further. You're responsible for telling them that their entries are visible to you and handled under our Privacy Policy.</p>
+
+<h2>What you may not do</h2>
+<p>You must not upload, suggest or share anything that:</p>
+<ul>
+  <li>belongs to someone else and you have no right to share, or includes another person's private information;</li>
+  <li>is obscene, defamatory, harassing, hateful, or insulting on grounds of religion, caste, gender, or ethnicity;</li>
+  <li>is harmful to children, infringes intellectual property, is false or misleading, impersonates anyone, or contains malicious code;</li>
+  <li>threatens the unity, security or sovereignty of India, public order, or relations with other countries, or otherwise breaks any law in force.</li>
+</ul>
+<p>You must also not scrape the catalogue, get around usage limits, probe our systems without permission, or resell the service. We may remove content and restrict or end access for any breach, and we may report unlawful activity where the law requires it.</p>
+
+<h2>Names you contribute</h2>
+<p>A single name is generally not something anyone owns, but a list, its descriptions and its arrangement may be protected. By contributing, you confirm you wrote the list or may share it. You give us a non-exclusive, worldwide, royalty-free, perpetual and sublicensable licence to use, edit, and publish your contribution within our catalogue and related services. We review contributions, and may reject or change them. Deleting your account removes your link to a contribution, but not the name from the catalogue.</p>
+
+<h2>Our content</h2>
+<p>The service, including its design, software and catalogue as a collection, belongs to us or our licensors. You may use the names you find for naming your child, without any restriction from us.</p>
+
+<h2>Free and paid features</h2>
+<p>Naamadeva is free today, with monthly limits on AI requests. If we add paid features, we'll show the price, taxes, and refund terms before you pay, and nothing will be charged without your clear agreement.</p>
+
+<h2>Availability and changes</h2>
+<p>We may change, suspend or end features. If we plan to close the service, we'll try to give you reasonable notice and time to download your data.</p>
+
+<h2>Warranties and liability</h2>
+<p>The service is provided "as is" and "as available". To the extent the law allows, we disclaim implied warranties, and we aren't liable for indirect or consequential loss, including distress or costs linked to a name you chose. To the extent the law allows, our total liability is limited to the greater of the amount you paid us in the previous 12 months and ₹1,000. Nothing here limits rights that you can't give up under law, including under the Consumer Protection Act, 2019.</p>
+
+<h2>Indemnity</h2>
+<p>You agree to compensate us for third-party claims caused by your content or your breach of these terms, to the extent the law allows.</p>
+
+<h2>Ending your use</h2>
+<p>You can stop at any time and <a href="{% url 'account_settings' %}">delete your account</a>. Sections that by their nature should continue, including the licence, liability, and governing law, continue afterwards.</p>
+
+<h2>Governing law and disputes</h2>
+<p>Indian law governs these terms. Please contact our <a href="{% url 'grievance' %}">Grievance Officer</a> first. Subject to any right you have to bring a consumer complaint elsewhere, courts at {{ legal.city }} have exclusive jurisdiction.</p>
+
+<h2>Changes</h2>
+<p>When we change these terms in a way that matters, we publish a new version and ask you to accept it the next time you sign in.</p>
+
+<h2>Contact</h2>
+<p>{{ legal.entity }}, {{ legal.address }}. Email: {{ legal.email }}.</p>
+{% endblock %}

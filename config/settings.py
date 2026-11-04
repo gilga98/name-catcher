@@ -17,6 +17,7 @@ CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
 INSTALLED_APPS = [
     "names",  # First, so its templates restyle allauth's pages.
+    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.messages",
@@ -24,6 +25,9 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "allauth",
     "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
+    "allauth.mfa",
     "django_htmx",
 ]
 MIDDLEWARE = [
@@ -39,6 +43,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
     "django_ratelimit.middleware.RatelimitMiddleware",
+    "names.middleware.ConsentGateMiddleware",
     "names.middleware.AIErrorMiddleware",
 ]
 ROOT_URLCONF = "config.urls"
@@ -52,6 +57,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "names.context.legal",
             ]
         },
     }
@@ -97,6 +103,23 @@ ACCOUNT_PASSWORD_RESET_BY_CODE_ENABLED = True
 ACCOUNT_SESSION_REMEMBER = True
 ACCOUNT_EMAIL_SUBJECT_PREFIX = "Naamadeva: "
 # Set to CF-Connecting-IP behind Cloudflare so allauth's login limits see the real visitor.
+ACCOUNT_SIGNUP_FORM_CLASS = "names.forms.SignupConsentForm"
+# Google sign-up still stops at our consent form. An existing account with the same verified email is reused.
+SOCIALACCOUNT_AUTO_SIGNUP = False
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", default="")
+GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", default="")
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APPS": [{"client_id": GOOGLE_CLIENT_ID, "secret": GOOGLE_CLIENT_SECRET}] if GOOGLE_CLIENT_ID else [],
+        "SCOPE": ["openid", "email"],  # Ask for the least we need. We have no use for the Google profile.
+        "OAUTH_PKCE_ENABLED": True,
+    }
+}
+MFA_SUPPORTED_TYPES = ["totp", "recovery_codes"]
+ADMIN_PATH = env("ADMIN_PATH", default="manage/")
+REQUIRE_ADMIN_MFA = env.bool("REQUIRE_ADMIN_MFA", default=not DEBUG)
 ALLAUTH_TRUSTED_CLIENT_IP_HEADER = env("TRUSTED_CLIENT_IP_HEADER", default=None)
 
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
@@ -145,7 +168,8 @@ CONTENT_SECURITY_POLICY = {
         "connect-src": [SELF],
         "frame-ancestors": [NONE],
         "base-uri": [SELF],
-        "form-action": [SELF],
+        # Chrome also applies this to redirects after a submit, which is how the Google button leaves the site.
+        "form-action": [SELF, "https://accounts.google.com"],
     }
 }
 
@@ -156,6 +180,18 @@ GEMINI_TTS_MODEL = env("GEMINI_TTS_MODEL", default="gemini-3.8-flash-lite-tts")
 GEMINI_TTS_VOICE = env("GEMINI_TTS_VOICE", default="Kore")
 GEMINI_TIMEOUT_MS = env.int("GEMINI_TIMEOUT_MS", default=20000)
 GEMINI_ATTEMPTS = env.int("GEMINI_ATTEMPTS", default=2)
+
+AI_FREE_CALLS_PER_MONTH = env.int("AI_FREE_CALLS_PER_MONTH", default=50)
+CATALOG_SHARD_LIMIT = env.int("CATALOG_SHARD_LIMIT", default=3000)
+ACCOUNT_RETENTION_DAYS = env.int("ACCOUNT_RETENTION_DAYS", default=730)
+
+# Published in the legal pages. Change POLICY_VERSION when the policies change: everyone accepts again.
+POLICY_VERSION = "2026-11-04.2"
+LEGAL_ENTITY_NAME = env("LEGAL_ENTITY_NAME", default="")
+LEGAL_ADDRESS = env("LEGAL_ADDRESS", default="")
+LEGAL_JURISDICTION_CITY = env("LEGAL_JURISDICTION_CITY", default="")
+GRIEVANCE_OFFICER_NAME = env("GRIEVANCE_OFFICER_NAME", default="")
+GRIEVANCE_EMAIL = env("GRIEVANCE_EMAIL", default="")
 
 AI_RATE_PER_BOARD = env("AI_RATE_PER_BOARD", default="30/h")
 AI_RATE_GLOBAL = env("AI_RATE_GLOBAL", default="200/h")

@@ -1,0 +1,9 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p>Upload a UTF-8 CSV with a header row. Columns: {{ columns|join:", " }}. Only <code>name</code> is required. Separate several genres with <code>|</code>. A name that matches an existing entry, in any spelling or script, fills in its blanks instead of creating a second entry.</p>
+<form method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <input type="submit" value="Upload names" class="default">
+</form>
+{% endblock %}

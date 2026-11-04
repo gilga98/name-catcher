@@ -7,6 +7,7 @@ from django.core.cache import cache
 from django.test import Client, override_settings
 from django.urls import reverse
 
+from names.accounts import record_consent
 from names.models import Board, Name
 
 pytestmark = pytest.mark.django_db
@@ -27,6 +28,7 @@ def member(board, email="parent@example.com"):
     user = get_user_model().objects.create_user(username=email, email=email, password="not-a-real-pw-1")
     board.members.add(user)
     client = Client()
+    record_consent(user)
     client.force_login(user)
     return client, board.parent_token
 
@@ -53,13 +55,19 @@ def page(actor):
 
 def test_new_parent_signs_up_verifies_by_code_and_keeps_their_brief():
     client = Client()
-    response = client.post(reverse("home"), {"surname": "Rao", "themes": ["Light"]})
+    response = client.post(reverse("home"), {"surname": "Rao", "notes": "Something bright, like the sunrise"})
     assert response.url == reverse("account_signup")
     assert not Board.objects.exists()
 
     client.post(
         reverse("account_signup"),
-        {"email": "new@example.com", "password1": "a-long-passphrase-9", "password2": "a-long-passphrase-9"},
+        {
+            "email": "new@example.com",
+            "password1": "a-long-passphrase-9",
+            "password2": "a-long-passphrase-9",
+            "accept_terms": "on",
+            "confirm_adult": "on",
+        },
     )
     code = re.search(r"^\s*([A-Z0-9-]{6,})\s*$", mail.outbox[0].body, re.M).group(1)
     response = client.post(reverse("account_email_verification_sent"), {"code": code}, follow=True)

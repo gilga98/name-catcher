@@ -1,18 +1,33 @@
+{% load static %}
+<div class="field">
+  <label class="z-form-label" for="{{ form.nickname.id_for_label }}">What do you call your baby for now?</label>
+  <input class="z-input" type="text" id="{{ form.nickname.id_for_label }}" name="nickname" maxlength="30" value="{{ form.nickname.value|default:'' }}" placeholder="Chintu, Bump, Little one">
+  <fieldset class="avatar-picker"><legend class="hint">Pick a picture</legend>
+    {% for choice in form.avatar %}<label class="avatar-choice">{{ choice.tag }}<img src="{% static 'names/avatars/'|add:choice.data.value|add:'.svg' %}" alt="{{ choice.choice_label }}" width="52" height="52"></label>{% endfor %}
+  </fieldset>
+</div>
 <div class="field">
   <label class="z-form-label" for="{{ form.surname.id_for_label }}">Family name</label>
   <input class="z-input" type="text" id="{{ form.surname.id_for_label }}" name="surname" maxlength="40" value="{{ form.surname.value|default:'' }}" placeholder="So you can hear the full name" autocomplete="family-name">
+  <label class="check-row">{{ form.share_surname }} <span>Also share it with AI, so it can judge how names sound with it. Without this, it stays with us.</span></label>
 </div>
 <fieldset class="field"><legend class="z-form-label">Who is this name for?</legend>
   <div class="chips">{% for choice in form.gender %}<label class="chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
 </fieldset>
-<fieldset class="field"><legend class="z-form-label">Which roots feel like home?</legend>
+<fieldset class="field field-wide"><legend class="z-form-label">Which roots feel like home?</legend>
   <div class="chips">{% for choice in form.origins %}<label class="chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
 </fieldset>
-<fieldset class="field"><legend class="z-form-label">What should it mean?</legend>
-  <div class="chips">{% for choice in form.themes %}<label class="chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
-</fieldset>
+<div class="field field-wide">
+  <label class="z-form-label" for="{{ form.notes.id_for_label }}">What should it mean?</label>
+  <textarea class="z-textarea notes" id="{{ form.notes.id_for_label }}" name="notes" maxlength="500" rows="4" placeholder="Tell us in your own words. Maybe the place you met, who you'd like to honour, or the kind of person you hope they'll grow into.">{{ form.notes.value|default:'' }}</textarea>
+  <label class="check-row">{{ form.share_notes }} <span>Show this to family on the family link, so their suggestions fit.</span></label>
+  <p class="hint">AI reads this when it looks for names, so please leave out phone numbers, addresses and health details.</p>
+</div>
 <fieldset class="field"><legend class="z-form-label">What style?</legend>
   <div class="chips">{% for choice in form.style %}<label class="chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
+</fieldset>
+<fieldset class="field"><legend class="z-form-label">How unusual should it be?</legend>
+  <div class="chips">{% for choice in form.uniqueness %}<label class="chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</div>
 </fieldset>
 <div class="field-row">
   <div class="field">
@@ -22,5 +37,6 @@
   <div class="field">
     <label class="z-form-label" for="{{ form.avoid.id_for_label }}">Names to avoid</label>
     <input class="z-input" type="text" id="{{ form.avoid.id_for_label }}" name="avoid" maxlength="200" value="{{ form.avoid.value|default:'' }}" placeholder="Cousins, exes, that one teacher">
+    <p class="hint">Family never sees this, and it isn't sent to AI.</p>
   </div>
 </div>

@@ -17,7 +17,7 @@ _IDEAS = (
 )
 
 
-def _idea(row: tuple, surname: str = "") -> NameIdea:
+def _idea(row: tuple) -> NameIdea:
     name, native, meaning, origin, respelling, lang = row
     return NameIdea(
         name=name,
@@ -26,7 +26,12 @@ def _idea(row: tuple, surname: str = "") -> NameIdea:
         origin=origin,
         respelling=respelling,
         speech_lang=lang,
-        surname_fit=f"Flows well into {surname}" if surname else "",
+        gender="any",
+        rarity="uncommon",
+        style="any",
+        genres=[],
+        insight="",
+        surname_fit="",
     )
 
 
@@ -34,10 +39,10 @@ class StubAI:
     def suggest(self, request: SuggestionRequest) -> list[NameIdea]:
         seen = {*request.liked, *request.passed}
         fresh = [row for row in _IDEAS if row[0] not in seen]
-        return [_idea(row, request.brief.get("surname", "")) for row in fresh[:4]]
+        return [_idea(row) for row in fresh[:4]]
 
-    def describe(self, name: str, surname: str) -> NameIdea:
-        return _idea((name, name, "A name your family suggested", "", name, "en-IN"), surname)
+    def describe(self, name: str, genres: list[str]) -> NameIdea:
+        return _idea((name, name, "A name your family suggested", "", name, "en-IN"))
 
     def speak(self, text: str) -> bytes:
         buffer = io.BytesIO()

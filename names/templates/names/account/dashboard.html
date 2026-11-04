@@ -1,0 +1,38 @@
+{% extends "names/base.html" %}
+{% block title %}Dashboard Naamadeva{% endblock %}
+{% block content %}
+<div class="bento">
+  <header class="tile tile-hero tile-hero-small">
+    <h1>{% if profile.display_name %}Hello, {{ profile.display_name }}{% else %}Your dashboard{% endif %}</h1>
+    <p><a class="z-button z-button-default" href="{% url 'home' %}">Start a new board</a></p>
+  </header>
+  <section class="tile tile-boards-wide">
+    <h2>Your boards</h2>
+    {% if boards %}
+    <ul class="board-cards">
+      {% for board in boards %}
+      <li><a href="{% url 'board' board.parent_token %}"><strong>{% if board.brief.surname %}Baby {{ board.brief.surname }}{% else %}Baby names{% endif %}</strong><span>{{ board.names.all|length }} name{{ board.names.all|length|pluralize }}</span></a></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint">You don't have a board yet. Start one to get your first names.</p>
+    {% endif %}
+  </section>
+  <section class="tile tile-plan">
+    <h2>Your plan</h2>
+    <p class="big-number">{{ ai_left }}<small> of {{ ai_total }}</small></p>
+    <p class="hint">AI requests left this month, on the free plan. Names from our catalogue don't use any.</p>
+  </section>
+  <section class="tile tile-contribute">
+    <h2>Share names you know</h2>
+    <p class="hint">Add names from your family, language or region. We review each one, then other families can find it.</p>
+    <p class="meta">{{ contributions }} from you so far.</p>
+    <a class="z-button z-button-default" href="{% url 'contribute' %}">Add names</a>
+  </section>
+  <section class="tile tile-data">
+    <h2>Your data</h2>
+    <p class="hint">Change your details, download everything we hold or delete your account.</p>
+    <a class="z-button z-button-default" href="{% url 'account_settings' %}">Open settings</a>
+  </section>
+</div>
+{% endblock %}

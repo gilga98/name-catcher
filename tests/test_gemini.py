@@ -10,7 +10,8 @@ from names.ai.gemini import GeminiAI
 
 IDEA = NameIdea(
     name="Tara", native_script="तारा", meaning="Star", origin="Sanskrit",
-    respelling="TAA-raa", speech_lang="hi-IN", surname_fit="",
+    respelling="TAA-raa", speech_lang="hi-IN", gender="girl", rarity="uncommon", style="any",
+    genres=[], insight="", surname_fit="",
 )  # fmt: skip
 
 
@@ -55,21 +56,21 @@ def test_family_text_is_sent_as_data_with_a_schema(gemini):
 def test_network_failure_becomes_a_friendly_error_without_details(gemini):
     stub(gemini, httpx.ConnectError("https://x?key=test-key"))
     with pytest.raises(AIError) as error:
-        gemini.describe("a", "b")
+        gemini.describe("a", [])
     assert "test-key" not in str(error.value)
 
 
 def test_free_limit_is_explained_and_not_retried(gemini):
     stub(gemini, errors.ClientError(429, {"error": {"message": "quota"}}))
     with pytest.raises(AIError) as error:
-        gemini.describe("a", "b")
+        gemini.describe("a", [])
     assert "free usage limit" in str(error.value)
 
 
 def test_unparseable_reply_is_an_error(gemini):
     stub(gemini, SimpleNamespace(parsed=None))
     with pytest.raises(AIError):
-        gemini.describe("a", "b")
+        gemini.describe("a", [])
 
 
 def test_speech_is_wrapped_as_wav(gemini):

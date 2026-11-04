@@ -1,0 +1,14 @@
+{% extends "names/base.html" %}
+{% block body_class %}narrow{% endblock %}
+{% block content %}
+<section class="tile legal">
+  <h1>We've updated our policies</h1>
+  <p>Please read the <a href="{% url 'privacy' %}" target="_blank">Privacy Policy</a> and <a href="{% url 'terms' %}" target="_blank">Terms of Use</a> (version {{ legal.version }}) before you carry on.</p>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="z-button z-button-primary" type="submit" name="accept" value="1">I'm 18 or older and I agree</button>
+  </form>
+  <p class="hint">If you don't agree, you can <a href="{% url 'account_export' %}">download your data</a> and <a href="{% url 'account_settings' %}">delete your account</a>.</p>
+</section>
+{% endblock %}
