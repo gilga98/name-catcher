@@ -116,6 +116,17 @@ def _fresh(candidates: list[Name], board: Board) -> list[Name]:
     return fresh
 
 
+def _hold_names(board: Board) -> None:
+    """Relatives sent the same idea can arrive together. Waiting here means each one's check sees the name before it."""
+    Board.objects.select_for_update().get(pk=board.pk)
+
+
+@transaction.atomic
+def _add_fresh(candidates: list[Name], board: Board) -> list[Name]:
+    _hold_names(board)
+    return Name.objects.bulk_create(_fresh(candidates, board))
+
+
 def birth_star_job(board: Board) -> Job | None:
     """A finished reading deletes its job, so a row here means it's still running, or that it failed."""
     return Job.objects.filter(board=board, kind="read_birth_star").order_by("-pk").first()
@@ -189,7 +200,7 @@ def engine_context(board: Board, voter: Voter) -> dict:
 def add_from_catalog(board: Board, ids: list[int]) -> list[Name]:
     """The browser chose these. It is trusted with taste, not with state, so everything is checked again here."""
     entries = catalog.pick(ids[:20])
-    names = Name.objects.bulk_create(_fresh([_from_catalog(board, entry) for entry in entries], board))
+    names = _add_fresh([_from_catalog(board, entry) for entry in entries], board)
     kept = {name.key for name in names}
     catalog.record_picks(entry for entry in entries if entry.key in kept)
     prepare_names(board, names)
@@ -207,6 +218,8 @@ def _suggestion_request(board: Board, more_like: str = "") -> SuggestionRequest:
         overused=catalog.overused_names(),
         genres=catalog.genre_names(),
         family_suggested=[n.text for n in newest_first if n.suggested_by][:30],
+        # Still in the deck. Each one the LLM repeated would be paid for, then dropped by _fresh.
+        shown=[n.text for n in newest_first if n.status == Name.Status.REVIEW and not n.suggested_by][:MAX_SHOWN_IDEAS],
     )
 
 
@@ -234,7 +247,7 @@ def suggest_names(board: Board, more_like: str = "") -> list[Name]:
     """The last resort: the browser found too little in the catalogue, so this one costs money."""
     ideas = _ask_llm(_suggestion_request(board, more_like))
     candidates = [_build_name(board, idea, source=Name.Source.LLM) for idea in ideas]
-    names = Name.objects.bulk_create(_fresh(candidates, board))
+    names = _add_fresh(candidates, board)
     prepare_names(board, names)
     return names
 
@@ -286,11 +299,14 @@ def family_ideas_need_llm(board: Board) -> bool:
 
 def fetch_family_ideas(board: Board, *, refresh: bool = False) -> None:
     stored = _stored_family_ideas(board)
-    shown = [*stored.get("shown", []), *(idea["text"] for idea in _family_list(board))] if refresh else []
+    on_screen = [idea["text"] for idea in _family_list(board)]
+    shown = [*stored.get("shown", []), *on_screen] if refresh else []
     shown = shown[-MAX_SHOWN_IDEAS:]
     try:
         accounts.charge_ai_call(board, AICall.Kind.SUGGEST)
-        names = [{"text": i.name[:60], "meaning": i.meaning} for i in _ask_llm(_family_request(board, shown))]
+        # Relatives can see the catalogue's ideas, so the first ask can rule them out without hiding them afterwards.
+        ideas = _ask_llm(_family_request(board, shown or on_screen))
+        names = [{"text": idea.name[:60], "meaning": idea.meaning} for idea in ideas]
     except AIError:
         names = []  # They can still type their own, so a failure here isn't worth an error.
     stamp = catalog.brief_stamp(board.brief)
@@ -333,17 +349,20 @@ def family_ideas(board: Board, *, allow_llm: bool) -> list[dict]:
 def add_name(board: Board, text: str, voter: Voter, *, force: bool = False) -> AddResult:
     """Local and instant. describe_name fills in the details afterwards, so nobody waits on the LLM."""
     key = catalog.canonical_key(text)
-    duplicate = None if force else find_duplicate(text, board.names.all(), key=key)
-    if duplicate and not voter.is_parent:
-        # "Is this the same as...?" would give away what's on the board, so their support joins it without asking.
-        merge_into(duplicate, text, voter)
-        return AddResult(hidden_duplicate=True)
-    if duplicate:
-        return AddResult(duplicate=duplicate)
-    name = _typed_name(board, text, key, suggested_by=voter.name)
-    name.save()
-    if voter.is_parent:
-        keep(name, voter)
+    with transaction.atomic():
+        _hold_names(board)
+        # Only a parent is ever asked whether two names differ, so only a parent can insist that they do.
+        duplicate = None if force and voter.is_parent else find_duplicate(text, board.names.all(), key=key)
+        if duplicate and not voter.is_parent:
+            # "Is this the same as...?" would give away what's on the board, so their support joins it without asking.
+            merge_into(duplicate, text, voter)
+            return AddResult(hidden_duplicate=True)
+        if duplicate:
+            return AddResult(duplicate=duplicate)
+        name = _typed_name(board, text, key, suggested_by=voter.name)
+        name.save()
+        if voter.is_parent:
+            keep(name, voter)
     prepare_names(name.board, [name])
     return AddResult(name=name)
 
@@ -397,10 +416,13 @@ def describe_name(name: Name) -> str:
 
 
 def preview_name(board: Board, text: str, *, start: bool) -> tuple[Name, str]:
-    """The card the parents would get, saved nowhere on the board. It never looks at the board's names either, so it
-    reads the same whether or not this one is already there. Only `start` can ask for an LLM description."""
+    """The card the parents would get, saved nowhere on the board. Only `start` can ask for an LLM description. The
+    board's names decide only whether that's worth paying for, because sending this one would merge it. They never
+    add to the card: it looks like a description that failed, so it doesn't reveal what's on the board."""
     key = catalog.canonical_key(text)
     if start and catalog.lookup(key) is None and accounts.ai_allowed(board):
+        if not catalog.being_described(key) and find_duplicate(text, board.names.all(), key=key):
+            return _typed_name(board, text, key), Details.PENDING  # The next check finds nothing and says so.
         catalog.request_enrichment(text, key)
         key = catalog.canonical_key(text)  # An answer can turn this into another spelling of a known name.
     name = _typed_name(board, text, key)

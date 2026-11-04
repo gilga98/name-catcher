@@ -432,6 +432,17 @@ def test_an_unknown_name_is_described_while_the_card_is_open(board):
     assert "A name your family suggested" in response and "every 2s" not in response
 
 
+def test_a_preview_pays_for_nothing_when_the_name_is_already_on_the_board(board):
+    parent(board, "a@example.com")
+    Name.objects.create(board=board, text="Muhammad", key=catalog.phonetic_key("Muhammad"), status=Name.Status.KEPT)
+    with override_settings(JOBS_EAGER=False):
+        first = preview(board, "Mohammed").content.decode()
+    assert "Adding tags and meaning" in first and "Muhammad" not in first
+    assert not CatalogName.objects.exists()
+    checked = preview(board, "Mohammed", checking="1").content.decode()
+    assert "catalogue yet" in checked and "Muhammad" not in checked
+
+
 def test_checking_on_a_card_cant_start_a_description(board):
     parent(board, "a@example.com")
     assert b"catalogue yet" in preview(board, "Zorvika", checking="1").content

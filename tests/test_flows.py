@@ -7,8 +7,9 @@ from django.core.cache import cache
 from django.test import Client, override_settings
 from django.urls import reverse
 
+from names import services
 from names.accounts import record_consent
-from names.models import Board, Name
+from names.models import Board, CatalogName, Name
 
 pytestmark = pytest.mark.django_db
 HTMX = {"HTTP_HX_REQUEST": "true"}
@@ -190,6 +191,54 @@ def test_guest_duplicate_joins_without_asking(guest, board):
     assert existing.votes.count() == 1
 
 
+def test_relatives_sending_the_same_idea_share_one_card(guest, board):
+    post(guest, "add", text="Vihaan", by="Maa")
+    post((Client(), board.guest_token), "add", text="Vihaan", by="Papa")
+    name = board.names.get()
+    assert name.suggested_by == "Maa"
+    assert [vote.voter_name for vote in name.votes.all()] == ["Papa"]
+
+
+def test_a_relative_cannot_insist_on_a_second_copy(guest, board):
+    Name.objects.create(board=board, text="Aarav", key="arav")
+    post(guest, "add", text="Arav", force="1")
+    assert board.names.count() == 1
+
+
+def test_a_parent_can_still_say_it_is_a_different_name(parent, board):
+    Name.objects.create(board=board, text="Aarav", key="arav")
+    post(parent, "add", text="Arav", force="1")
+    assert board.names.count() == 2
+
+
+class RecordingAI:
+    def __init__(self):
+        self.requests = []
+
+    def suggest(self, request):
+        self.requests.append(request)
+        return []
+
+
+def test_the_llm_is_told_what_waits_in_the_deck(board, monkeypatch):
+    ai = RecordingAI()
+    monkeypatch.setattr("names.services.get_ai", lambda: ai)
+    Name.objects.create(board=board, text="Rohan", key="rohan", source=Name.Source.CATALOG)
+    Name.objects.create(board=board, text="Zoya", key="zoya", suggested_by="Maa")
+    services.suggest_names(board)
+    assert ai.requests[0].shown == ["Rohan"]
+    assert ai.requests[0].family_suggested == ["Zoya"]
+
+
+def test_the_first_family_ask_rules_out_ideas_already_on_screen(board, monkeypatch):
+    ai = RecordingAI()
+    monkeypatch.setattr("names.services.get_ai", lambda: ai)
+    CatalogName.objects.create(text="Tara", key="tara", meaning="Star", status=CatalogName.Status.APPROVED)
+    services.fetch_family_ideas(board)
+    assert ai.requests[0].shown == ["Tara"]
+    assert "Tara" in [idea["text"] for idea in services.family_ideas(board, allow_llm=False)]
+
+
 @override_settings(JOBS_EAGER=False)
 def test_adding_a_name_never_waits_on_the_llm(parent, guest, board, monkeypatch):
     def no_llm():
@@ -215,12 +264,6 @@ def test_details_load_after_adding_and_only_once(parent, board, monkeypatch):
 
     monkeypatch.setattr("names.services.get_ai", lambda: pytest.fail("details were already known"))
     assert post(parent, "details", name.pk).status_code == 200
-
-
-def test_guest_can_insist_it_is_a_different_name(guest, board):
-    Name.objects.create(board=board, text="Aarav", key="arav")
-    post(guest, "add", text="Arav", force="1")
-    assert board.names.count() == 2
 
 
 def test_guest_suggestion_waits_for_parents(guest, parent, board):

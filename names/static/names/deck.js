@@ -116,6 +116,7 @@
   // Keeps two parents in step without a reload: their decisions, and names that reach the deck meanwhile.
   const SYNC_MS = 15000;
   let inFlight = 0;
+  let syncing = false;
   let lastStamp = null;
   document.body.addEventListener("htmx:beforeRequest", () => { inFlight++; });
   document.body.addEventListener("htmx:afterRequest", () => { inFlight--; });
@@ -127,15 +128,22 @@
     element.classList.toggle("did-pass", Boolean(note.text) && !note.kept);
   }
 
+  // Anything mid-flight could look like a new card, or be replaced under someone's finger.
+  const busy = () => document.hidden || drag || inFlight || review.querySelector(".fly-left, .fly-right");
+
   async function sync() {
-    // Anything mid-flight could look like a new card, or be replaced under someone's finger.
-    if (document.hidden || drag || inFlight || review.querySelector(".fly-left, .fly-right")) return;
+    // A phone waking up fires the timer and visibilitychange together, and two rounds would each fetch the new cards.
+    if (syncing || busy()) return;
+    syncing = true;
     let body;
     try {
       body = await (await fetch(review.dataset.decisionsUrl)).json();
     } catch {
       return; // Offline for a moment. The next round catches up.
+    } finally {
+      syncing = false;
     }
+    if (busy()) return; // Something started during that fetch. The next round catches up.
     const fresh = [];
     Object.entries(body.notes).forEach(([id, note]) => {
       const card = review.querySelector(`[data-card-id="${id}"]`);
