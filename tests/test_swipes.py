@@ -565,3 +565,17 @@ def test_tapped_ideas_leave_the_list(board):
     Client().post(url, **HTMX)
     Client().post(reverse("add", args=[board.guest_token]), {"text": "Aarav"}, **HTMX)
     assert b"Aarav" not in Client().post(url, **HTMX).content
+
+
+def test_preview_name_with_no_ai_skips_llm_enrichment(board):
+    parent(board, "a@example.com")
+    with override_settings(JOBS_EAGER=False):
+        response = Client().post(
+            reverse("preview_name", args=[board.guest_token]),
+            {"text": "Zorvika", "no_ai": "1"},
+            **HTMX,
+        )
+        assert response.status_code == 200
+        assert "catalogue yet" in response.content.decode()
+        assert not CatalogName.objects.exists()
+

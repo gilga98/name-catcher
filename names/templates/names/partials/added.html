@@ -1,2 +1,18 @@
+{% load ui %}
+{% if is_parent %}
 <p class="z-alert" role="status">{{ message }}</p>
-{% if is_parent %}{% include "names/partials/shortlist.html" %}{% endif %}
+{% include "names/partials/shortlist.html" %}
+{% else %}
+<div class="sent-celebration" role="status"{% if name %} data-sent-name="{{ name.text }}"{% endif %}>
+  <div class="celebration-bloom" aria-hidden="true">
+    {% icon "heart" %}
+  </div>
+  <div class="celebration-text">
+    <h3 class="celebration-title">Sent with love!</h3>
+    <p class="celebration-desc">{{ message }}</p>
+  </div>
+  <button class="celebration-dismiss" type="button" aria-label="Dismiss" onclick="this.closest('.sent-celebration').remove()">
+    {% icon "x" %}
+  </button>
+</div>
+{% endif %}

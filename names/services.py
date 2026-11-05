@@ -428,7 +428,7 @@ def describe_name(name: Name) -> str:
     return Details.UNAVAILABLE
 
 
-def preview_name(board: Board, text: str, *, start: bool) -> tuple[Name, str]:
+def preview_name(board: Board, text: str, *, start: bool, allow_ai: bool = True) -> tuple[Name, str]:
     """The card the parents would get, saved nowhere on the board. Only `start` can ask for an LLM description. The
     board's names decide only whether that's worth paying for, because sending this one would merge it. They never
     add to the card: it looks like a description that failed, so it doesn't reveal what's on the board."""
@@ -436,7 +436,7 @@ def preview_name(board: Board, text: str, *, start: bool) -> tuple[Name, str]:
     name = _typed_name(board, text, key)
     if _use_family_answer(name):
         return name, Details.READY
-    if start and catalog.lookup(key) is None and accounts.ai_allowed(board):
+    if start and allow_ai and catalog.lookup(key) is None and accounts.ai_allowed(board):
         if not catalog.being_described(key) and find_duplicate(text, board.names.all(), key=key):
             return _typed_name(board, text, key), Details.PENDING  # The next check finds nothing and says so.
         catalog.request_enrichment(text, key)

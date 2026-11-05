@@ -499,10 +499,11 @@ def preview_name(request: HttpRequest, token: str) -> HttpResponse:
     if not form.is_valid():
         return HttpResponse(NOT_A_NAME, status=422, content_type="text/plain")
     checking = "checking" in request.POST
+    allow_ai = "no_ai" not in request.POST and (checking or _may_spend_ai(request))
     if not checking:
         _spend_preview_budget(request)
     text = form.cleaned_data["text"]
-    name, state = services.preview_name(request.board, text, start=not checking)
+    name, state = services.preview_name(request.board, text, start=not checking, allow_ai=allow_ai)
     if state == services.Details.PENDING:
         nudge(LLM)
     context = _context(
@@ -511,7 +512,7 @@ def preview_name(request: HttpRequest, token: str) -> HttpResponse:
         text=text,
         pending=state == services.Details.PENDING,
         no_details=state == services.Details.UNAVAILABLE,
-        by=request.session.get("voter_name", ""),
+        by=request.POST.get("by") or request.session.get("voter_name", ""),
     )
     template = "family_preview_details" if checking else "family_preview"
     return render(request, f"names/partials/{template}.html", context)

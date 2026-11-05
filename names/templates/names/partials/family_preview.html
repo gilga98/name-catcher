@@ -1,4 +1,9 @@
-{% load ui %}<dialog class="preview-dialog" aria-labelledby="preview-title">
+{% load ui %}<dialog class="preview-dialog preview-sheet" aria-labelledby="preview-title">
+  <div class="sheet-handle" aria-hidden="true"></div>
+  <div class="preview-sheet-header">
+    <span class="preview-sheet-eyebrow">{% icon "eye" %} Card preview</span>
+    <button class="preview-close-button" type="button" data-close-preview aria-label="Close preview">{% icon "x" %}</button>
+  </div>
   <article class="name-card {{ name.key|tint }}">
     <div class="card-art">
       <svg class="card-bloom" aria-hidden="true" focusable="false"><use href="#i-bloom"></use></svg>
@@ -11,12 +16,17 @@
   </article>
   <form class="preview-send" hx-post="{% url 'add' token %}" hx-target="#add-result" hx-disabled-elt="find [type=submit]" data-send-name>
     <input type="hidden" name="text" value="{{ text }}">
-    <label class="z-form-label" for="preview-by">Your name</label>
-    <input class="z-input" id="preview-by" name="by" maxlength="40" value="{{ by }}" placeholder="Family" pattern="[^\d<>\/:@.]*" title="Just your name, without numbers or symbols" autocomplete="off">
-    <p class="hint">{% icon "eye" %}The parents see this card and the name you enter here, and we tag your suggestion automatically.</p>
+    <div class="preview-field-group">
+      <label class="z-form-label" for="preview-by">
+        {% icon "person" %}
+        <span>Who is suggesting this? <small class="text-optional">(optional)</small></span>
+      </label>
+      <input class="z-input" id="preview-by" name="by" maxlength="40" value="{{ by }}" placeholder="e.g. Dadi, Uncle Priya, Family" pattern="[^\d<>\/:@.]*" title="Just your name, without numbers or symbols" autocomplete="off">
+      <p class="hint">The parents will see this card on their board and know it was suggested by you.</p>
+    </div>
     <div class="preview-actions">
-      <button class="z-button z-button-default" type="button" data-close-preview>{% icon "x" %} Not this one</button>
-      <button class="z-button z-button-primary" type="submit">{% icon "check" %} Send</button>
+      <button class="z-button z-button-default" type="button" data-close-preview>{% icon "left" %} Not this one</button>
+      <button class="z-button z-button-primary btn-send-love" type="submit">{% icon "heart" %} Send with love</button>
     </div>
   </form>
 </dialog>

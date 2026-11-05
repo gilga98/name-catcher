@@ -119,29 +119,109 @@
 </div>
 {% else %}
 <div class="guest">
-  <header class="guest-head">
+  <header class="guest-hero">
     <svg class="card-bloom" aria-hidden="true" focusable="false"><use href="#i-bloom"></use></svg>
-    {% include "names/partials/baby_avatar.html" %}
-    <h1>Help name {{ baby }}</h1>
-    {% if wishes.notes %}<blockquote class="wishes">{{ wishes.notes }}</blockquote>{% endif %}
-    {% if wishes.tags %}<ul class="tags" aria-label="What the parents are hoping for">{% for tag in wishes.tags %}<li>{{ tag }}</li>{% endfor %}</ul>{% endif %}
+    <div class="guest-avatar-wrap">
+      {% include "names/partials/baby_avatar.html" %}
+    </div>
+    <div class="guest-hero-titles">
+      <span class="guest-eyebrow">{% icon "heart" %} Family & Friends Invitation</span>
+      <h1>Help name {{ baby }}</h1>
+      <p class="guest-subtitle">Share your favorite baby names and help the parents discover the one they'll treasure forever.</p>
+    </div>
+    {% if wishes.notes or wishes.tags %}
+    <div class="guest-wishes">
+      {% if wishes.notes %}
+      <div class="wishes-box">
+        <span class="wishes-quote-label">{% icon "chat" %} A note from the parents</span>
+        <blockquote class="wishes">“{{ wishes.notes }}”</blockquote>
+      </div>
+      {% endif %}
+      {% if wishes.tags %}
+      <div class="wishes-tags-wrap">
+        <span class="wishes-tags-label">What the parents are hoping for</span>
+        <ul class="tags wishes-tags" aria-label="What the parents are hoping for">
+          {% for tag in wishes.tags %}
+          <li>{{ tag }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
   </header>
-  <div class="guest-side">
-    <section class="tile">
-      <h2>Tap to suggest</h2>
-      <div data-ideas hx-post="{% url 'family_ideas' token %}" hx-trigger="load" hx-swap="innerHTML"><p class="thinking" role="status">Finding ideas…</p></div>
-    </section>
-    <section class="tile">
-      <h2>Or add your own</h2>
-      <form id="add-name" class="add-form" hx-post="{% url 'preview_name' token %}" hx-target="#family-preview" hx-disabled-elt="find [type=submit]">
-        <label class="z-form-label" for="add-text">Name, in any spelling or script</label>
-        <input class="z-input" id="add-text" name="text" maxlength="40" required autocomplete="off">
-        <button class="z-button z-button-primary submit" type="submit">{% icon "eye" %} Preview</button>
-        <p class="hint">Nothing reaches the parents until you send it.{% if family_ai_on %} To build the preview, AI may describe the name you enter, even if you don't send it.{% endif %} <a href="{% url 'privacy' %}">Privacy Policy</a></p>
+
+  <div id="add-result" class="guest-alerts"></div>
+
+  <section id="guest-sent-shelf" class="guest-sent-shelf" hidden>
+    <div class="sent-shelf-head">
+      <div class="sent-shelf-title">
+        {% icon "heart" %}
+        <span>Sent by you this visit</span>
+      </div>
+      <span class="sent-shelf-badge">With the parents</span>
+    </div>
+    <div class="sent-shelf-pills" id="guest-sent-pills"></div>
+  </section>
+
+  <div class="guest-main">
+    <section class="tile guest-suggest-card">
+      <div class="suggest-card-head">
+        <div class="suggest-badge" aria-hidden="true">
+          {% icon "spark" %}
+        </div>
+        <div>
+          <h2>Suggest a name</h2>
+          <p class="suggest-desc">Type any name in English or your native script. Send it directly or preview it first.</p>
+        </div>
+      </div>
+      <form id="add-name" class="add-form guest-add-form" hx-disabled-elt="find button" data-send-name>
+        <div class="guest-fields-grid">
+          <div class="guest-field">
+            <label class="z-form-label" for="add-text">Baby name</label>
+            <input class="z-input guest-name-input" id="add-text" name="text" maxlength="40" placeholder="Type a baby name…" required autocomplete="off">
+          </div>
+          <div class="guest-field">
+            <label class="z-form-label" for="add-by">Your name <small class="text-optional">(optional)</small></label>
+            <input class="z-input guest-by-input" id="add-by" name="by" maxlength="40" placeholder="e.g. Dadi, Uncle Priya, Family" pattern="[^\d<>\/:@.]*" title="Just your name, without numbers or symbols" autocomplete="off">
+          </div>
+        </div>
+        {% if family_ai_on %}
+        <div class="guest-ai-opt-row">
+          <label class="guest-ai-toggle" for="add-no-ai">
+            <input type="checkbox" id="add-no-ai" name="no_ai" value="1">
+            <span>Skip AI lookup (fast send / save parents' AI allowance)</span>
+          </label>
+        </div>
+        {% endif %}
+        <div class="guest-actions-row">
+          <button class="z-button z-button-primary guest-send-direct-btn" type="submit" hx-post="{% url 'add' token %}" hx-target="#add-result">
+            {% icon "heart" %} Send to parents
+          </button>
+          <button class="z-button z-button-default guest-preview-btn" type="submit" hx-post="{% url 'preview_name' token %}" hx-target="#family-preview">
+            {% icon "eye" %} Preview card
+          </button>
+        </div>
+        <p class="hint">{% icon "shield" %} Sending directly is instant and uses no AI.{% if family_ai_on %} To build the preview, AI may describe the name you enter, even if you don't send it.{% endif %} <a href="{% url 'privacy' %}">Privacy Policy</a></p>
       </form>
-      <div id="add-result"></div>
+    </section>
+
+    <section class="tile guest-ideas-card">
+      <div class="ideas-card-head">
+        <div class="suggest-badge" aria-hidden="true">
+          {% icon "cards" %}
+        </div>
+        <div>
+          <h2>Ideas to explore</h2>
+          <p class="ideas-desc">Curated suggestions matching the parents' wishes. Tap any name to view its meaning and send it.</p>
+        </div>
+      </div>
+      <div data-ideas hx-post="{% url 'family_ideas' token %}" hx-trigger="load" hx-swap="innerHTML">
+        <p class="thinking" role="status">Finding ideas…</p>
+      </div>
     </section>
   </div>
+
   <div id="family-preview"></div>
 </div>
 {% endif %}

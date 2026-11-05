@@ -381,3 +381,20 @@ def test_security_headers_are_set(parent):
 def test_healthchecks():
     assert Client().get("/healthz").content == b"ok"
     assert Client().get("/readyz").content == b"ok"
+
+
+def test_family_submission_screen_layout_and_celebration(guest):
+    html = page(guest).content.decode()
+    assert "guest-hero" in html
+    assert "guest-avatar-wrap" in html
+    assert "guest-suggest-card" in html
+    assert "guest-ideas-card" in html
+    assert 'id="guest-sent-shelf"' in html
+
+    added_resp = post(guest, "add", text="Ananya", by="Dadi")
+    assert added_resp.status_code == 200
+    added_html = added_resp.content.decode()
+    assert "sent-celebration" in added_html
+    assert "Sent with love!" in added_html
+    assert "Thanks. Ananya is with the parents now." in added_html
+
