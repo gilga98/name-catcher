@@ -38,7 +38,7 @@
     <button class="z-button z-button-primary z-button-large wizard-next" type="button" data-wizard-next>Next</button>
     <button class="z-button z-button-primary z-button-large wizard-submit" type="submit">Show me names</button>
   </div>
-  <p class="hint wizard-note">All optional. {% if not user.is_authenticated %}Next you'll create a free account, so your names stay yours.{% endif %}</p>
+  <p class="hint wizard-note">All optional. {% if not user.is_authenticated %}You can start swiping right away — no account needed to try it out.{% endif %}</p>
 </form>
 
 {% if not user.is_authenticated %}

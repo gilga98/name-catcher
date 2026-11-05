@@ -185,6 +185,28 @@ document.querySelectorAll("[data-baby-photo]").forEach((image) => {
 
 document.addEventListener("click", (event) => {
   if (event.target.closest("[data-dismiss-cookies]")) dismissCookieNotice();
+  const toggle = event.target.closest("[data-password-toggle]");
+  if (toggle) {
+    const wrap = toggle.closest(".password-wrap");
+    const input = wrap?.querySelector("[data-password-input]");
+    if (input) {
+      const isPassword = input.type === "password";
+      input.type = isPassword ? "text" : "password";
+      toggle.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
+      toggle.setAttribute("title", isPassword ? "Hide password" : "Show password");
+    }
+    return;
+  }
+  if (event.target.closest("[data-open-save-modal]")) {
+    const modal = document.getElementById("save-board-modal");
+    if (modal) (typeof modal.showModal === "function" ? modal.showModal() : (modal.open = true));
+    return;
+  }
+  if (event.target.closest("[data-close-save-modal]")) {
+    const modal = document.getElementById("save-board-modal");
+    if (modal) (typeof modal.close === "function" ? modal.close() : (modal.open = false));
+    return;
+  }
   const sound = event.target.closest("[data-sound]");
   if (sound) document.querySelector("[data-starts-with]").value = sound.dataset.sound;
   const button = event.target.closest("[data-say], [data-copy], [data-share]");

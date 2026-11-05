@@ -71,8 +71,12 @@ def _spend_ai_budget(request: HttpRequest) -> None:
 
 def _voter(request: HttpRequest, is_parent: bool) -> Voter:
     if is_parent:
-        name = accounts.profile_of(request.user).display_name or "Parent"
-        return Voter(id=accounts.voter_id(request.user), name=name, is_parent=True)
+        if request.user.is_authenticated:
+            name = accounts.profile_of(request.user).display_name or "Parent"
+            return Voter(id=accounts.voter_id(request.user), name=name, is_parent=True)
+        if "provisional_voter" not in request.session:
+            request.session["provisional_voter"] = f"prov-{uuid.uuid4().hex[:20]}"
+        return Voter(id=request.session["provisional_voter"], name="Parent", is_parent=True)
     return Voter(id=request.session.get("voter", ""), name=request.session.get("voter_name", "Family"), is_parent=False)
 
 
@@ -110,11 +114,21 @@ def with_board(*, parent_only: bool = False):
             if board is None or (parent_only and token == board.guest_token):
                 raise Http404
             is_parent = token == board.parent_token
-            if is_parent and not request.user.is_authenticated:
-                return _send_to_login(request, board)
-            if is_parent and not board.members.filter(pk=request.user.pk).exists():
-                raise Http404
-            request.board, request.is_parent = board, is_parent
+            is_provisional = False
+            if is_parent:
+                if request.user.is_authenticated:
+                    if not board.members.exists() and request.session.get("provisional_board") == token:
+                        services.claim_board(board, request.user, request.session.get("provisional_voter"))
+                        request.session.pop("provisional_board", None)
+                        request.session.pop("provisional_voter", None)
+                    if not board.members.filter(pk=request.user.pk).exists():
+                        raise Http404
+                else:
+                    if not board.members.exists() and request.session.get("provisional_board") == token:
+                        is_provisional = True
+                    else:
+                        return _send_to_login(request, board)
+            request.board, request.is_parent, request.is_provisional = board, is_parent, is_provisional
             request.voter = _voter(request, is_parent)
             return view(request, token, *args, **kwargs)
 
@@ -134,6 +148,7 @@ def _context(request: HttpRequest, **extra) -> dict:
         "board": request.board,
         "token": request.resolver_match.kwargs["token"],
         "is_parent": request.is_parent,
+        "is_provisional": getattr(request, "is_provisional", False),
         "surname": surname,
         "baby": brief.get("nickname") or (f"baby {surname}" if surname else "baby"),
         "avatar": brief.get("avatar") or "a1",
@@ -149,12 +164,14 @@ def _shortlist(request: HttpRequest, *, oob: bool = False, template: str = "shor
 
 
 def _start_board(request: HttpRequest) -> HttpResponse:
-    """A brief filled in before signing up waits in the session, so nobody has to answer twice."""
-    if not request.user.is_authenticated:
-        return redirect("account_signup")
-    if is_ratelimited(request, group="create-user", key="user", rate=settings.BOARD_CREATE_PER_USER, increment=True):
-        raise Ratelimited
-    board = services.create_board(request.user, request.session.pop(PENDING_BRIEF))
+    brief = request.session.pop(PENDING_BRIEF, None) or {}
+    if request.user.is_authenticated:
+        if is_ratelimited(request, group="create-user", key="user", rate=settings.BOARD_CREATE_PER_USER, increment=True):
+            raise Ratelimited
+        board = services.create_board(request.user, brief)
+    else:
+        board = services.create_provisional_board(brief)
+        request.session["provisional_board"] = board.parent_token
     return redirect("board", token=board.parent_token)
 
 
@@ -173,13 +190,28 @@ def home(request: HttpRequest) -> HttpResponse:
 
 
 @require_http_methods(["GET", "POST"])
-@login_required
 def join(request: HttpRequest, token: str) -> HttpResponse:
     board = get_object_or_404(Board, invite_token=token)
-    if request.method == "POST":
-        services.join_board(board, request.user)
-        return redirect("board", token=board.parent_token)
-    return render(request, "names/join.html", {"surname": board.brief.get("surname", "")})
+    if request.user.is_authenticated:
+        if request.method == "POST":
+            services.join_board(board, request.user)
+            return redirect("board", token=board.parent_token)
+    elif request.method == "POST":
+        return _send_to_login(request, board)
+    inviter = board.members.first()
+    inviter_name = accounts.profile_of(inviter).display_name if inviter else ""
+    return render(
+        request,
+        "names/join.html",
+        {
+            "board": board,
+            "surname": board.brief.get("surname", ""),
+            "baby": board.brief.get("nickname") or (f"baby {board.brief.get('surname')}" if board.brief.get("surname") else "baby"),
+            "avatar": board.brief.get("avatar") or "a1",
+            "inviter_name": inviter_name,
+            "token": token,
+        },
+    )
 
 
 def _chosen(choices: list, value: str | None) -> str:

@@ -1,13 +1,25 @@
 {% extends "names/base.html" %}
-{% load ui %}
+{% load static ui %}
 {% block content %}
 <div class="join">
-  <span class="invite-mark">{% icon "heart" %}</span>
-  <h1>Join the naming board{% if surname %} for baby {{ surname }}{% endif %}</h1>
-  <p>Swipe names, keep favourites and vote as a parent.</p>
+  <div class="join-avatar">
+    <img src="{% static 'names/avatars/'|add:avatar|add:'.svg' %}" alt="Baby avatar" width="72" height="72">
+  </div>
+  <h1>{% if inviter_name %}{{ inviter_name }} wants to find a name with you{% else %}Join the naming board{% if surname %} for baby {{ surname }}{% endif %}{% endif %}</h1>
+  <p>Swipe through names, discover each other's favorites, and build your baby's shortlist together.</p>
+
+  {% if user.is_authenticated %}
   <form method="post">
     {% csrf_token %}
-    <button class="z-button z-button-primary z-button-large" type="submit">Join this board</button>
+    <button class="z-button z-button-primary z-button-large" type="submit">Join board as co-parent{% icon "right" %}</button>
   </form>
+  {% else %}
+  <div class="join-actions">
+    {% include "socialaccount/snippets/login.html" with next=request.get_full_path %}
+    <div class="auth-divider"><span>or</span></div>
+    <a class="z-button z-button-primary z-button-large" href="{% url 'account_signup' %}?next={{ request.get_full_path }}">Sign up with email</a>
+    <p class="hint">Already have an account? <a href="{% url 'account_login' %}?next={{ request.get_full_path }}">Sign in</a></p>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

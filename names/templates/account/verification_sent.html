@@ -1,0 +1,17 @@
+{% extends "allauth/layouts/base.html" %}
+{% load ui %}
+{% block head_title %}Confirm your email — Naamadeva{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <div class="auth-header">
+    <svg class="auth-bloom" aria-hidden="true"><use href="#i-bloom"></use></svg>
+    <h1>Check your inbox</h1>
+    <p>We've sent a verification link to your email address. Follow the link to keep your account safe.</p>
+  </div>
+  <p class="hint">Didn't receive the email? Check your spam folder or try requesting a new link in a few minutes.</p>
+  <div class="auth-footer-actions">
+    <a class="z-button z-button-primary z-button-large" href="{% url 'home' %}">Go to your boards</a>
+  </div>
+</div>
+{% endblock %}
+

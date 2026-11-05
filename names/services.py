@@ -44,6 +44,25 @@ def create_board(user: AbstractBaseUser, brief: dict) -> Board:
     return board
 
 
+def create_provisional_board(brief: dict) -> Board:
+    return Board.objects.create(brief=brief)
+
+
+@transaction.atomic
+def claim_board(board: Board, user: AbstractBaseUser, voter_id_from: str | None = None) -> None:
+    if not board.members.filter(pk=user.pk).exists():
+        board.members.add(user)
+    if voter_id_from:
+        new_voter_id = accounts.voter_id(user)
+        if voter_id_from != new_voter_id:
+            Swipe.objects.filter(name__board=board, voter=voter_id_from).update(voter=new_voter_id)
+            Vote.objects.filter(name__board=board, voter=voter_id_from).update(
+                voter=new_voter_id, voter_name=accounts.profile_of(user).display_name or "Parent"
+            )
+            for name in board.names.filter(swipes__isnull=False).distinct():
+                name.settle()
+
+
 @transaction.atomic
 def join_board(board: Board, user: AbstractBaseUser) -> None:
     """Invites are single use: each join issues a new link."""

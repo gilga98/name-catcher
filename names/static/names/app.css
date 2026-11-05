@@ -494,9 +494,13 @@ main form.tune-form .step-q, .tune-form .field legend.step-q { font-size: 1.25re
 }
 
 /* Join */
-.join { display: grid; justify-items: center; gap: .75rem; max-width: 30rem; margin: 3rem auto; padding: 2rem 1.5rem; border-radius: 1.75rem; background: var(--paper); text-align: center; }
-.join h1 { margin: 0; font-size: clamp(2rem, 6vw, 2.75rem); line-height: 1.1; letter-spacing: -.02em; }
+.join { display: grid; justify-items: center; gap: .75rem; max-width: 30rem; margin: 3rem auto; padding: 2.25rem 1.75rem; border-radius: 1.75rem; background: var(--paper); border: 1px solid var(--petal); text-align: center; }
+.join h1 { margin: 0; font-size: clamp(1.875rem, 5vw, 2.5rem); line-height: 1.15; letter-spacing: -.02em; }
 .join p { margin: 0 0 .5rem; color: var(--mauve); }
+.join-avatar { margin-bottom: .25rem; }
+.join-avatar img { border-radius: 50%; background: var(--oat); padding: .5rem; }
+.join-actions { display: grid; gap: .75rem; width: 100%; max-width: 20rem; margin-top: .5rem; }
+.join-actions .auth-divider { margin-block: .125rem; }
 
 /* Dashboard and settings */
 .tile-plan { display: grid; justify-items: center; align-content: center; text-align: center; }
@@ -564,6 +568,264 @@ main form p:has(> input, > textarea) { margin-bottom: 1rem; }
 main form label { display: block; font-weight: 600; margin-bottom: .375rem; }
 main form p > span, main form .helptext { display: block; margin-top: .375rem; color: var(--mauve); font-size: .875rem; }
 main form .errorlist { color: var(--z-danger-f); padding-left: 1rem; }
+
+/* Redesigned Auth Experience & Cards */
+.auth-card {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 28rem;
+  margin: 2rem auto;
+  padding: 2.25rem 2rem;
+  border-radius: 1.75rem;
+  background: var(--paper);
+  border: 1px solid var(--petal);
+  box-shadow: 0 10px 30px -10px rgba(90, 33, 80, 0.08);
+}
+.auth-header {
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: .5rem;
+}
+.auth-bloom {
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--love);
+}
+.auth-header h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 5vw, 2.25rem);
+  line-height: 1.15;
+  letter-spacing: -.02em;
+}
+.auth-header p {
+  margin: 0;
+  color: var(--mauve);
+  font-size: .9375rem;
+  line-height: 1.45;
+}
+.auth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--mauve);
+  font-size: .8125rem;
+  margin-block: .25rem;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid var(--petal);
+}
+.auth-divider span {
+  padding-inline: .75rem;
+}
+.auth-form {
+  display: grid;
+  gap: 1.125rem;
+}
+.field-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.forgot-link {
+  font-size: .8125rem;
+  color: var(--plum);
+  text-decoration: underline;
+  padding: 0;
+}
+.password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.password-wrap input {
+  padding-right: 2.75rem;
+}
+.password-toggle {
+  position: absolute;
+  right: .5rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mauve);
+  cursor: pointer;
+  border-radius: .375rem;
+}
+.password-toggle:hover {
+  color: var(--ink);
+}
+.password-toggle .icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+.consent-fields {
+  display: grid;
+  gap: .625rem;
+  margin-top: .25rem;
+}
+.consent-fields .check-row {
+  font-size: .875rem;
+  line-height: 1.4;
+  color: var(--mauve);
+}
+.consent-fields .check-row a {
+  color: var(--plum);
+  text-decoration: underline;
+}
+.field-error {
+  margin: .25rem 0 0;
+  color: var(--pass-ink);
+  font-size: .8125rem;
+}
+.has-error {
+  border-color: var(--pass-ink) !important;
+}
+.auth-submit {
+  width: 100%;
+  margin-top: .5rem;
+}
+.auth-footer-hint {
+  text-align: center;
+  font-size: .875rem;
+  color: var(--mauve);
+  margin: 0;
+}
+.auth-footer-hint a {
+  color: var(--plum);
+  font-weight: 600;
+  text-decoration: underline;
+}
+.auth-email {
+  color: var(--ink);
+}
+.auth-footer-actions {
+  display: grid;
+  gap: .75rem;
+  justify-items: center;
+}
+
+/* Provisional Guest Board Banner */
+.provisional-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .75rem 1.25rem;
+  flex-wrap: wrap;
+  padding: .75rem 1.25rem;
+  margin-bottom: 1.25rem;
+  border-radius: 1.25rem;
+  background: var(--paper);
+  border: 1px solid var(--petal);
+  box-shadow: 0 4px 14px rgba(90, 33, 80, 0.05);
+}
+.provisional-info {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  font-size: .875rem;
+  color: var(--ink);
+  flex: 1;
+  min-width: 16rem;
+}
+.provisional-pill {
+  flex: none;
+  font-size: .6875rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-weight: 700;
+  padding: .2rem .5rem;
+  border-radius: 1rem;
+  background: var(--petal);
+  color: var(--plum);
+}
+
+/* Save Board Modal */
+.save-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  width: 100vw;
+  height: 100dvh;
+  display: grid;
+  place-items: center;
+}
+.save-modal:not([open]) {
+  display: none;
+}
+.save-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(43, 22, 38, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.save-modal-card {
+  position: relative;
+  z-index: 2;
+  width: calc(100% - 2rem);
+  max-width: 28rem;
+  padding: 2.25rem 2rem;
+  border-radius: 1.75rem;
+  background: var(--paper);
+  border: 1px solid var(--petal);
+  box-shadow: 0 20px 40px -10px rgba(43, 22, 38, 0.25);
+  animation: modalScaleIn .2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes modalScaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.save-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.save-modal-header {
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: .5rem;
+  margin-bottom: 1.5rem;
+}
+.save-modal-header h2 {
+  margin: .5rem 0 0;
+  font-size: 1.875rem;
+  line-height: 1.2;
+}
+.save-modal-header p {
+  margin: 0;
+  color: var(--mauve);
+  font-size: .9375rem;
+}
+.save-modal-actions {
+  display: grid;
+  gap: .875rem;
+}
+.save-modal-actions .auth-divider {
+  margin-block: .25rem;
+}
+.save-modal-signin {
+  text-align: center;
+  margin: .25rem 0 0;
+  font-size: .875rem;
+}
+.save-modal-signin a {
+  color: var(--plum);
+  font-weight: 600;
+  text-decoration: underline;
+}
 
 .htmx-indicator { display: none; }
 .htmx-request.htmx-indicator { display: block; }

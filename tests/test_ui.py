@@ -51,3 +51,12 @@ def test_a_truly_missing_hashed_asset_is_kept_out_of_caches(client):
     missing = client.get("/static/names/nonexistent.000000000000.css")
     assert missing.status_code == 404
     assert missing["Cache-Control"] == "no-store"
+
+
+@pytest.mark.django_db
+def test_redesigned_auth_pages_render_with_custom_design_system(client):
+    for route in ["account_signup", "account_login", "account_reset_password"]:
+        res = client.get(reverse(route))
+        assert res.status_code == 200
+        assert b"auth-card" in res.content
+        assert b"auth-bloom" in res.content

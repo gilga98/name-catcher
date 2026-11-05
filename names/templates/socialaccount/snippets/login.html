@@ -1,7 +1,7 @@
 {% load socialaccount %}
 {% get_providers as socialaccount_providers %}
 {% for provider in socialaccount_providers %}
-{% provider_login_url provider process="login" as href %}
+{% provider_login_url provider process="login" next=next|default:request.get_full_path as href %}
 <form method="post" action="{{ href }}" class="social-login">
   {% csrf_token %}
   <button class="z-button z-button-default z-button-large google" type="submit">

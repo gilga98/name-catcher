@@ -54,29 +54,68 @@ def page(actor):
     return client.get(reverse("board", args=[token]))
 
 
-def test_new_parent_signs_up_verifies_by_code_and_keeps_their_brief():
+def test_new_parent_swipes_immediately_then_claims_board():
     client = Client()
     response = client.post(reverse("home"), {"surname": "Rao", "notes": "Something bright, like the sunrise"})
-    assert response.url == reverse("account_signup")
-    assert not Board.objects.exists()
+    board = Board.objects.get()
+    assert response.url == reverse("board", args=[board.parent_token])
+    assert board.brief["themes"] == ["Light"]
+    assert not board.members.exists()
 
+    # The provisional parent can view and use the board immediately:
+    board_page = client.get(reverse("board", args=[board.parent_token]))
+    assert board_page.status_code == 200
+
+    # Next, they create an account to save their board:
     client.post(
         reverse("account_signup"),
         {
             "email": "new@example.com",
             "password1": "a-long-passphrase-9",
-            "password2": "a-long-passphrase-9",
             "accept_terms": "on",
             "confirm_adult": "on",
         },
     )
-    code = re.search(r"^\s*([A-Z0-9-]{6,})\s*$", mail.outbox[0].body, re.M).group(1)
-    response = client.post(reverse("account_email_verification_sent"), {"code": code}, follow=True)
 
-    board = Board.objects.get()
-    assert response.redirect_chain[-1][0] == reverse("board", args=[board.parent_token])
-    assert board.brief["themes"] == ["Light"]
+    board.refresh_from_db()
     assert board.members.get().email == "new@example.com"
+
+
+def test_provisional_swipes_and_votes_migrate_to_claimed_account():
+    client = Client()
+    client.post(reverse("home"), {"surname": "Patel"})
+    board = Board.objects.get()
+    name = Name.objects.create(board=board, text="Aarav", key="aarav")
+
+    # Unauthenticated swipe keep
+    client.post(reverse("keep", args=[board.parent_token, name.pk]), **HTMX)
+    name.refresh_from_db()
+    assert name.status == Name.Status.KEPT
+    assert name.votes.count() == 1
+
+    # Now sign up
+    client.post(
+        reverse("account_signup"),
+        {
+            "email": "aarav-parent@example.com",
+            "password1": "a-long-passphrase-9",
+            "accept_terms": "on",
+            "confirm_adult": "on",
+        },
+    )
+    user = get_user_model().objects.get(email="aarav-parent@example.com")
+    name.refresh_from_db()
+    vote = name.votes.get()
+    assert vote.voter == f"user-{user.pk}"
+    swipe = name.swipes.get()
+    assert swipe.voter == f"user-{user.pk}"
+
+
+def test_unauthenticated_partner_sees_invite_page_before_login(board):
+    client = Client()
+    response = client.get(reverse("join", args=[board.invite_token]))
+    assert response.status_code == 200
+    assert b"Sharma" in response.content
 
 
 def test_signed_in_parent_starts_a_board_straight_away(board, parent):

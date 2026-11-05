@@ -28,10 +28,34 @@
     card.style.setProperty("--pass", Math.max(0, Math.min(1, -dx / threshold())));
   }
 
+  const isProvisional = Boolean(document.getElementById("provisional-banner"));
+  let swipeCount = 0;
+  const PROVISIONAL_SWIPE_PROMPT = 4;
+  const MODAL_SHOWN_KEY = "save-board-prompt-shown";
+
+  function promptSaveIfProvisional() {
+    if (!isProvisional) return;
+    swipeCount++;
+    if (swipeCount >= PROVISIONAL_SWIPE_PROMPT) {
+      let shown = false;
+      try { shown = sessionStorage.getItem(MODAL_SHOWN_KEY) === "1"; } catch { shown = false; }
+      if (!shown) {
+        try { sessionStorage.setItem(MODAL_SHOWN_KEY, "1"); } catch {}
+        setTimeout(() => {
+          const modal = document.getElementById("save-board-modal");
+          if (modal && !modal.open) {
+            typeof modal.showModal === "function" ? modal.showModal() : (modal.open = true);
+          }
+        }, 500);
+      }
+    }
+  }
+
   function decide(card, liked) {
     const button = card.querySelector(liked ? "[data-taste=liked]" : "[data-taste=passed]");
     card.classList.remove("dragging");
     card.classList.add(liked ? "fly-right" : "fly-left");
+    promptSaveIfProvisional();
     setTimeout(() => button.click(), FLY_MS);
   }
 

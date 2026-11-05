@@ -1,0 +1,52 @@
+{% extends "allauth/layouts/base.html" %}
+{% load ui socialaccount %}
+{% block head_title %}Sign in — Naamadeva{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <div class="auth-header">
+    <svg class="auth-bloom" aria-hidden="true"><use href="#i-bloom"></use></svg>
+    <h1>Welcome back</h1>
+    <p>Sign in to see your baby names, shortlists, and partner matches.</p>
+  </div>
+
+  {% include "socialaccount/snippets/login.html" with next=redirect_field_value %}
+
+  <div class="auth-divider"><span>or with email</span></div>
+
+  <form class="auth-form" method="post" action="{% url 'account_login' %}">
+    {% csrf_token %}
+    {% if redirect_field_value %}
+    <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}">
+    {% endif %}
+
+    {% if form.non_field_errors %}
+    <div class="z-alert z-alert-danger" role="alert">
+      {{ form.non_field_errors }}
+    </div>
+    {% endif %}
+
+    <div class="field">
+      <label class="z-form-label" for="{{ form.login.id_for_label }}">Email address</label>
+      <input class="z-input{% if form.login.errors %} has-error{% endif %}" type="email" name="login" id="{{ form.login.id_for_label }}" value="{{ form.login.value|default:'' }}" required autocomplete="email" placeholder="you@example.com">
+      {% if form.login.errors %}<p class="field-error">{{ form.login.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div class="field">
+      <div class="field-label-row">
+        <label class="z-form-label" for="{{ form.password.id_for_label }}">Password</label>
+        <a class="text-button forgot-link" href="{% url 'account_reset_password' %}">Forgot?</a>
+      </div>
+      <div class="password-wrap">
+        <input class="z-input{% if form.password.errors %} has-error{% endif %}" type="password" name="password" id="{{ form.password.id_for_label }}" required autocomplete="current-password" placeholder="Your password" data-password-input>
+        <button class="password-toggle" type="button" data-password-toggle aria-label="Show password" title="Show password">{% icon "eye" %}</button>
+      </div>
+      {% if form.password.errors %}<p class="field-error">{{ form.password.errors.0 }}</p>{% endif %}
+    </div>
+
+    <button class="z-button z-button-primary z-button-large auth-submit" type="submit">Sign in{% icon "right" %}</button>
+  </form>
+
+  <p class="auth-footer-hint">New to Naamadeva? <a href="{% url 'account_signup' %}{% if redirect_field_value %}?{{ redirect_field_name }}={{ redirect_field_value }}{% endif %}">Create an account</a></p>
+</div>
+{% endblock %}
+

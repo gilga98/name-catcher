@@ -1,0 +1,70 @@
+{% extends "allauth/layouts/base.html" %}
+{% load ui socialaccount %}
+{% block head_title %}Sign up — Naamadeva{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <div class="auth-header">
+    <svg class="auth-bloom" aria-hidden="true"><use href="#i-bloom"></use></svg>
+    <h1>Save your baby's names</h1>
+    <p>Create a free account to keep your shortlist safe and invite your partner to swipe together.</p>
+  </div>
+
+  {% include "socialaccount/snippets/login.html" with next=redirect_field_value %}
+
+  <div class="auth-divider"><span>or with email</span></div>
+
+  <form class="auth-form" method="post" action="{% url 'account_signup' %}">
+    {% csrf_token %}
+    {% if redirect_field_value %}
+    <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}">
+    {% endif %}
+
+    {% if form.non_field_errors %}
+    <div class="z-alert z-alert-danger" role="alert">
+      {{ form.non_field_errors }}
+    </div>
+    {% endif %}
+
+    <div class="field">
+      <label class="z-form-label" for="{{ form.email.id_for_label }}">Email address</label>
+      <input class="z-input{% if form.email.errors %} has-error{% endif %}" type="email" name="email" id="{{ form.email.id_for_label }}" value="{{ form.email.value|default:'' }}" required autocomplete="email" placeholder="you@example.com">
+      {% if form.email.errors %}<p class="field-error">{{ form.email.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div class="field">
+      <label class="z-form-label" for="{{ form.password1.id_for_label }}">Password</label>
+      <div class="password-wrap">
+        <input class="z-input{% if form.password1.errors %} has-error{% endif %}" type="password" name="password1" id="{{ form.password1.id_for_label }}" required autocomplete="new-password" placeholder="At least 8 characters" data-password-input>
+        <button class="password-toggle" type="button" data-password-toggle aria-label="Show password" title="Show password">{% icon "eye" %}</button>
+      </div>
+      {% if form.password1.errors %}<p class="field-error">{{ form.password1.errors.0 }}</p>{% endif %}
+    </div>
+
+    <div class="consent-fields">
+      <label class="check-row">
+        {{ form.confirm_adult }}
+        <span>I am 18 or older.</span>
+      </label>
+      {% if form.confirm_adult.errors %}<p class="field-error">{{ form.confirm_adult.errors.0 }}</p>{% endif %}
+
+      <label class="check-row">
+        {{ form.accept_terms }}
+        <span>I agree to the <a href="{% url 'terms' %}" target="_blank">Terms of Use</a> and acknowledge the <a href="{% url 'privacy' %}" target="_blank">Privacy Policy</a>.</span>
+      </label>
+      {% if form.accept_terms.errors %}<p class="field-error">{{ form.accept_terms.errors.0 }}</p>{% endif %}
+    </div>
+
+    {% if form.turnstile %}
+    <div class="field turnstile-wrap">
+      {{ form.turnstile }}
+      {% if form.turnstile.errors %}<p class="field-error">{{ form.turnstile.errors.0 }}</p>{% endif %}
+    </div>
+    {% endif %}
+
+    <button class="z-button z-button-primary z-button-large auth-submit" type="submit">Create account{% icon "right" %}</button>
+  </form>
+
+  <p class="auth-footer-hint">Already have an account? <a href="{% url 'account_login' %}{% if redirect_field_value %}?{{ redirect_field_name }}={{ redirect_field_value }}{% endif %}">Sign in</a></p>
+</div>
+{% endblock %}
+

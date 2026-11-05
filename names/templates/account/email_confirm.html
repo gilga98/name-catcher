@@ -1,0 +1,28 @@
+{% extends "allauth/layouts/base.html" %}
+{% load ui %}
+{% block head_title %}Confirm your email — Naamadeva{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <div class="auth-header">
+    <svg class="auth-bloom" aria-hidden="true"><use href="#i-bloom"></use></svg>
+    <h1>Confirm your email</h1>
+    {% if confirmation %}
+    <p>Please confirm that <strong class="auth-email">{{ confirmation.email_address.email }}</strong> belongs to you.</p>
+    {% else %}
+    <p>This confirmation link has expired or is invalid.</p>
+    {% endif %}
+  </div>
+
+  {% if confirmation %}
+  <form method="post" action="{% url 'account_confirm_email' confirmation.key %}" class="auth-form">
+    {% csrf_token %}
+    <button class="z-button z-button-primary z-button-large auth-submit" type="submit">Confirm email address{% icon "check" %}</button>
+  </form>
+  {% else %}
+  <div class="auth-footer-actions">
+    <a class="z-button z-button-primary z-button-large" href="{% url 'home' %}">Return home</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+

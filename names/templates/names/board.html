@@ -5,6 +5,15 @@
 {% block content %}
 {% if is_parent %}
 <div class="board" data-board data-active="swipe">
+  {% if is_provisional %}
+  <aside class="provisional-banner" id="provisional-banner">
+    <div class="provisional-info">
+      <span class="provisional-pill">Guest mode</span>
+      <span>Save {{ baby }}'s names to invite your partner & keep your shortlist.</span>
+    </div>
+    <button class="z-button z-button-primary z-button-small" type="button" data-open-save-modal>Save board</button>
+  </aside>
+  {% endif %}
   <header class="board-head">
     {% include "names/partials/baby_avatar.html" %}
     <h1>Names for {{ baby }}</h1>
@@ -52,6 +61,14 @@
 
     <section class="panel panel-invite" id="tab-invite" data-panel="invite">
       <h2 class="visually-hidden">Invite</h2>
+      {% if is_provisional %}
+      <article class="invite tint-4">
+        <span class="invite-mark">{% icon "heart" %}</span>
+        <h3>Your partner</h3>
+        <p>Save this board to invite your partner so you can swipe together and discover names you both love.</p>
+        <button class="z-button z-button-primary z-button-large" type="button" data-open-save-modal>Save board to invite partner</button>
+      </article>
+      {% else %}
       <article class="invite tint-4">
         <span class="invite-mark">{% icon "heart" %}</span>
         <h3>Your partner</h3>
@@ -63,6 +80,7 @@
         </div>
         <p class="hint">{% icon "lock" %}Works once. They sign in with their own account.</p>
       </article>
+      {% endif %}
       <article class="invite tint-1">
         <span class="invite-mark">{% icon "people" %}</span>
         <h3>Your family</h3>
@@ -116,6 +134,26 @@
       {% if birth_star_enabled %}<form id="birth-star-form" hx-post="{% url 'read_birth_star' token %}" hx-target="#birth-star" hx-swap="outerHTML" hx-disabled-elt="#find-birth-star" autocomplete="off"></form>{% endif %}
     </section>
   </div>
+
+  {% if is_provisional %}
+  <dialog id="save-board-modal" class="save-modal">
+    <div class="save-modal-backdrop" data-close-save-modal></div>
+    <div class="save-modal-card">
+      <button class="say-button save-modal-close" type="button" data-close-save-modal aria-label="Close" title="Close">{% icon "x" %}</button>
+      <div class="save-modal-header">
+        {% include "names/partials/baby_avatar.html" %}
+        <h2>Save {{ baby }}'s board</h2>
+        <p>Create a free account so your shortlist stays safe and you can invite your partner to swipe together.</p>
+      </div>
+      <div class="save-modal-actions">
+        {% include "socialaccount/snippets/login.html" with next=request.get_full_path %}
+        <div class="auth-divider"><span>or with email</span></div>
+        <a class="z-button z-button-primary z-button-large" href="{% url 'account_signup' %}?next={{ request.get_full_path }}">Sign up with email</a>
+        <p class="hint">Already have an account? <a href="{% url 'account_login' %}?next={{ request.get_full_path }}">Sign in</a></p>
+      </div>
+    </div>
+  </dialog>
+  {% endif %}
 </div>
 {% else %}
 <div class="guest">

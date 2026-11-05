@@ -129,15 +129,15 @@ AUTH_PASSWORD_VALIDATORS = [
 LOGIN_URL = "account_login"
 LOGIN_REDIRECT_URL = ACCOUNT_LOGOUT_REDIRECT_URL = "home"
 ACCOUNT_LOGIN_METHODS = {"email"}
-ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
-ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*"]
+ACCOUNT_EMAIL_VERIFICATION = "optional"
 ACCOUNT_EMAIL_VERIFICATION_BY_CODE_ENABLED = True
 ACCOUNT_PASSWORD_RESET_BY_CODE_ENABLED = True
 ACCOUNT_SESSION_REMEMBER = True
 ACCOUNT_EMAIL_SUBJECT_PREFIX = "Naamadeva: "
 ACCOUNT_SIGNUP_FORM_CLASS = "names.forms.SignupConsentForm"
-# Google sign-up still stops at our consent form. An existing account with the same verified email is reused.
-SOCIALACCOUNT_AUTO_SIGNUP = False
+# Google sign-up auto creates the account with inline consent. An existing account with the same verified email is reused.
+SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
 SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", default="")
