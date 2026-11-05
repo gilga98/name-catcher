@@ -30,12 +30,16 @@
       <h2 id="deck-title" class="visually-hidden">Names for {{ baby }} to try on</h2>
       <div class="deck-head">
         <span class="deck-count" id="deck-count" hidden>{% icon "cards" %}<span></span></span>
-        <button class="say-button" type="button" id="undo-swipe" title="Undo" aria-label="Undo" hidden>{% icon "undo" %}</button>
+        <button class="undo-button" type="button" id="undo-swipe" title="Undo swipe" aria-label="Undo last swipe" hidden>{% icon "undo" %}<span>Undo</span></button>
       </div>
       {{ engine|json_script:"engine-data" }}
       <div id="review" class="deck" data-decisions-url="{% url 'decisions' token %}" data-shortlist-url="{% url 'shortlist_panel' token %}" data-cards-url="{% url 'new_cards' token %}">{% include "names/partials/review_cards.html" %}</div>
-      <p id="deck-hint" class="deck-hint" hidden>{% icon "left" %}Swipe to pass or keep{% icon "right" %}</p>
-      <div id="deck-empty" class="empty" hidden>{% icon "bloom" %}<p>You've been through every name for now.</p></div>
+      <p id="deck-hint" class="deck-hint" hidden><span class="hint-pill">{% icon "left" %}Swipe to pass or keep{% icon "right" %}</span></p>
+      <div id="deck-empty" class="deck-empty empty" hidden>
+        <div class="empty-art">{% icon "bloom" %}</div>
+        <h3 class="empty-title">All caught up!</h3>
+        <p class="empty-desc">You've been through every name for now. Pull in more names or ask AI for fresh ideas.</p>
+      </div>
       <p id="deck-status" class="visually-hidden" role="status"></p>
       <div id="ai-status"></div>
       <p id="catalog-empty" class="hint" hidden>{% if engine.aiAllowed %}That's every match in our catalogue. AI can look further, using one of your monthly requests.{% else %}That's every match in our catalogue. AI is off in your settings, so try widening your preferences.{% endif %}</p>
