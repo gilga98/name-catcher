@@ -13,6 +13,7 @@
 </details>
 {% endif %}
 {% elif no_details %}
+{% include "names/partials/say.html" %}
 <p class="hint">This one isn't in our catalogue yet.</p>
 {% else %}
 <p class="thinking" role="status" hx-post="{% url 'details' token name.pk %}" hx-trigger="every 2s" hx-swap="outerHTML">Adding tags and meaning…</p>

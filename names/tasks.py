@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from . import catalog, jobs, mail, services, soota
 from .ai.base import AIError, AIRateLimited
+from .ai.rotation import resting
 from .dedup import phonetic_key
 from .jobs import drain_queue  # noqa: F401 - Huey worker autodiscovery
 from .models import AICall, Board, CatalogName, Job, Name
@@ -29,8 +30,10 @@ def send_email(job: Job) -> None:
 
 def suggest(job: Job) -> dict:
     board = get_object_or_404(Board, pk=job.payload["board"])
-    names = services.suggest_names(board, job.payload.get("more_like", ""))
-    return {"names": [name.pk for name in names]}
+    names, from_catalog = services.suggest_or_close_matches(
+        board, job.payload.get("more_like", ""), job.payload.get("charge")
+    )
+    return {"names": [name.pk for name in names], "from_catalog": from_catalog}
 
 
 def family_ideas(job: Job) -> None:
@@ -92,9 +95,15 @@ def _give_back(entries: list[CatalogName]) -> None:
         entry.save(update_fields=["enrich_attempts", "enrich_state", "updated_at"])
 
 
+def _put_back(entries: list[CatalogName]) -> None:
+    """Nobody could answer, which says nothing about these names, so it doesn't count against them."""
+    pks = [entry.pk for entry in entries]
+    CatalogName.objects.filter(pk__in=pks).update(enrich_state=CatalogName.Enrich.PENDING)
+
+
 def enrich_batch() -> bool:
     """Bundles names waiting from every family into one LLM call, then fills in every board that wants them."""
-    if not _waiting().exists() or _over_budget():
+    if resting() or not _waiting().exists() or _over_budget():
         return False
     catalog.wait_for_batch()
     batch = _claim_batch()
@@ -102,6 +111,9 @@ def enrich_batch() -> bool:
         return False
     try:
         ideas = services.get_ai().describe_many([entry.text for entry in batch], catalog.genre_names())
+    except AIRateLimited:
+        _put_back(batch)  # `run_jobs` carries on once AI is back.
+        return False
     except AIError:
         _give_back(batch)
         return False
@@ -149,7 +161,7 @@ def respell_batch() -> bool:
     spacing = settings.AI_RESPELL_SPACING_SECONDS
     day = timezone.now() - timedelta(days=1)
     spent = AICall.objects.filter(kind=AICall.Kind.RESPELL, created_at__gte=day).count()
-    if cache.get(RESPELL_PAUSED) or spent >= settings.AI_RESPELL_CALLS_PER_DAY:
+    if resting() or cache.get(RESPELL_PAUSED) or spent >= settings.AI_RESPELL_CALLS_PER_DAY:
         return False
     batch = _next_respelling()
     if not batch or (spacing and not cache.add(RESPELL_SPACED, 1, spacing)):

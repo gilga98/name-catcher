@@ -14,7 +14,7 @@ class AIError(Exception):
 
 
 class AIRateLimited(AIError):
-    """The backend asked us to slow down, so the same request is worth trying again later."""
+    """No model could take the request, through limits or an outage. It's worth trying again later, unchanged."""
 
 
 class RespelledName(BaseModel):

@@ -352,14 +352,14 @@ def test_guest_input_is_escaped_and_validated(guest, parent, board):
 
 
 @override_settings(AI_BACKEND="names.ai.gemini.GeminiAI", GEMINI_API_KEY="")
-def test_missing_key_gives_a_clear_error_and_never_leaks_config(parent):
+def test_a_missing_key_falls_back_to_the_catalogue_and_never_leaks_config(parent):
     from names.ai.base import get_ai
 
     get_ai.cache_clear()
     response = post(parent, "suggest")
     get_ai.cache_clear()
-    assert response.status_code == 200  # It failed in the background, and the person is told in place.
-    assert "GEMINI_API_KEY" in response.content.decode()
+    assert response.status_code == 200
+    assert "GEMINI" not in response.content.decode()
 
 
 @override_settings(AI_BACKEND="names.ai.gemini.GeminiAI", GEMINI_API_KEY="secret-value-123")

@@ -166,7 +166,7 @@ def test_switching_ai_off_stops_all_llm_use(board, user, spy, client):
 def test_monthly_allowance_stops_llm_calls_with_a_clear_message(board, spy, client):
     assert client.post(reverse("suggest", args=[board.parent_token]), **HTMX).status_code == 200
     response = client.post(reverse("suggest", args=[board.parent_token]), **HTMX)
-    assert response.status_code == 502
+    assert response.status_code == 200
     assert b"used up" in response.content
     assert len(spy.requests) == 1
 

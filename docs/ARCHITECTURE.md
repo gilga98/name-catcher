@@ -174,6 +174,20 @@ What someone typed is kept. A name typed in a script gets its Latin spelling onc
 | Permissions, quotas, consent, payment state | Server | Anything on a device can be edited by its owner |
 | Family boards | Server | Several people share them |
 
+## When AI fails
+
+AI is optional at every step. Whatever it does, nobody sees an error or waits on it, and a family isn't charged for a failure.
+
+| Step | Without AI |
+| --- | --- |
+| Deck | The browser ranks the catalogue, as it always does first |
+| Ask AI, or Similar | Close catalogue matches join the deck. Origin and style flex, gender doesn't |
+| A typed or suggested name | The card can still be heard and swiped. Its details arrive later, and a card stops saying they're coming after 60 seconds |
+| Family ideas | Catalogue ideas stay, and a later visit asks AI again |
+| Spellings by sound | The device voice reads the name as written, and the batch tries again later |
+
+`names/ai/rotation.py` shares calls across `GEMINI_MODELS`, because each model has its own free quota. Each call starts one model further along. A model that fails sits out, for as long as its retry delay says, an hour for a daily quota or a refused model, and 30 seconds for a server error, while the next model takes the call. When every model is sitting out, AI rests: pages skip it at once, and queued names wait for `run_jobs` without losing an attempt. An answer no model could use counts against the request instead, so one bad name can't retry for ever.
+
 ## Cost guards on the LLM
 
 1. The catalogue and browser answer first.

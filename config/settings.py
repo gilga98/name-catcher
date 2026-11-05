@@ -233,10 +233,14 @@ if TURNSTILE_SITE_KEY:
 
 AI_BACKEND = env("AI_BACKEND", default="names.ai.gemini.GeminiAI")
 GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
-GEMINI_MODEL = env("GEMINI_MODEL", default="gemini-3.1-flash-lite")
-# Runs on the worker, where nobody is held up. Every attempt together must stay under jobs.LEASE.
+# Calls take turns across these, because each model has a free quota of its own. See ai/rotation.py.
+GEMINI_MODELS = env.list(
+    "GEMINI_MODELS", default=["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
+)
+# Runs on the worker, where nobody is held up. The last call starts by the deadline and must end within jobs.LEASE.
 GEMINI_TIMEOUT_MS = env.int("GEMINI_TIMEOUT_MS", default=30000)
-GEMINI_ATTEMPTS = env.int("GEMINI_ATTEMPTS", default=2)
+GEMINI_ATTEMPTS = env.int("GEMINI_ATTEMPTS", default=1)  # Per model. Moving to the next model beats asking this again.
+GEMINI_DEADLINE_SECONDS = env.int("GEMINI_DEADLINE_SECONDS", default=90)
 
 # Soota works out birth stars. Until SOOTA_API_URL is set, nobody is asked for birth details.
 SOOTA_API_URL = env("SOOTA_API_URL", default="")

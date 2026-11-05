@@ -36,7 +36,7 @@
            data-pick-url="{% url 'suggest_from_catalog' token %}"
            data-is-new="{{ is_new|yesno:'true,false' }}">
         <button class="z-button z-button-default" type="button" id="suggest-local">{% icon "plus" %} More names</button>
-        {% if engine.aiAllowed %}<button class="z-button z-button-text" type="button" id="suggest-ai" hidden hx-disabled-elt="this" hx-post="{% url 'suggest' token %}" hx-target="#ai-status" hx-swap="innerHTML">{% icon "spark" %} Ask AI for rarer names</button>{% endif %}
+        {% if engine.aiAllowed %}<button class="z-button z-button-text" type="button" id="suggest-ai" hidden hx-disabled-elt="this" hx-post="{% url 'suggest' token %}" hx-target="#ai-status" hx-swap="innerHTML">{% icon "spark" %} Ask AI for rarer names</button>{% else %}<button class="z-button z-button-text" type="button" id="suggest-ai" hidden hx-disabled-elt="this" hx-post="{% url 'suggest' token %}" hx-target="#ai-status" hx-swap="innerHTML">{% icon "plus" %} Show close matches</button>{% endif %}
       </div>
     </section>
 

@@ -1,5 +1,5 @@
 {% if finished %}
-{% if queue %}<div hx-swap-oob="{{ where }}:#review">{% include "names/partials/review_cards.html" %}</div>{% elif error %}<p class="hint" role="alert">{{ error }}</p>{% else %}<p class="hint" role="status">AI didn't find anything new this time. Try changing what you're looking for.</p>{% endif %}
+{% if queue %}<div hx-swap-oob="{{ where }}:#review">{% include "names/partials/review_cards.html" %}</div>{% endif %}{% if note %}<p class="hint" role="status">{{ note }}</p>{% elif error %}<p class="hint" role="alert">{{ error }}</p>{% elif not queue %}<p class="hint" role="status">AI didn't find anything new this time. Try changing what you're looking for.</p>{% endif %}
 {% else %}
 <p class="thinking" role="status" hx-get="{% url 'ai_job' token job.pk %}" hx-trigger="every 1500ms" hx-target="#ai-status" hx-swap="innerHTML"><span data-z-spinner="ratio: 0.6"></span> AI is looking for rarer names. You can keep swiping.</p>
 {% endif %}

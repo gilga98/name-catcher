@@ -44,9 +44,9 @@ Use the Dockerfile build pack with port 8000 and health check path `/healthz`. S
 | `AI_RATE_PER_IP`, `AI_RATE_PER_BOARD`, `AI_RATE_GLOBAL` | No | Limits on LLM spend, narrowest first. A request stopped by a narrow one doesn't count against the wider ones. |
 | `FAMILY_REFRESH_RATE`, `AI_CALLS_KEPT_FOR_PARENTS` | No | How often relatives can ask for new AI ideas per board, and how many of the parents' monthly requests they can never use. |
 | `BOARD_CREATE_RATE`, `BOARD_CREATE_PER_USER`, `BOARD_RATE_PER_IP`, `ADD_RATE_PER_IP`, `GUEST_VOTERS_PER_IP` | No | Per-visitor and per-account limits. Generous, because mobile networks in India put many households behind one address. |
-| `GEMINI_MODEL` | No | Change models without touching code. |
+| `GEMINI_MODELS` | No | Comma-separated models that calls take turns on. A model that fails sits out, and the next one takes the call. Each model has its own free quota. Replaces `GEMINI_MODEL`, which is no longer read. |
 | `AI_RESPELL_CALLS_PER_DAY`, `AI_RESPELL_SPACING_SECONDS`, `AI_RESPELL_PAUSE_SECONDS` | No | Filling in spellings by sound for names that don't have one. Defaults to 20 calls a day, a minute apart, stopping for an hour if Gemini says to slow down. Each call covers up to `AI_ENRICH_BATCH_SIZE` names. |
-| `GEMINI_TIMEOUT_MS`, `GEMINI_ATTEMPTS` | No | How long one call may take, and how many tries it gets. Defaults to 30000 and 2. Together they must stay under the three minute job lease. |
+| `GEMINI_TIMEOUT_MS`, `GEMINI_ATTEMPTS`, `GEMINI_DEADLINE_SECONDS` | No | How long one call may take, how many tries each model gets, and when to stop moving on to another model. Defaults to 30000, 1 and 90. The last call to start must finish inside the three minute job lease. |
 | `SOOTA_API_URL`, `SOOTA_API_KEY` | No | `http://soota-engine-gateway:8000`, and the key for the `naamadeva` client (`python -m engine_gateway.keys naamadeva` in Soota's repo). Soota isn't public, so the gateway must run on the same Coolify server, on the `coolify` network. Parents see the birth star panel once the URL is set. Mark the key as a secret. |
 | `SOOTA_TIMEOUT_SECONDS`, `SOOTA_AYANAMSHA`, `SOOTA_NUMEROLOGY_SYSTEM`, `BIRTH_STAR_RATE`, `PLACE_SEARCH_RATE` | No | How long to wait for an answer, Soota's ayanamsha index (2 is Lahiri), `chaldean` or `pythagorean`, and readings and place searches per board. |
 

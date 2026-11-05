@@ -1,4 +1,5 @@
 import threading
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -9,14 +10,16 @@ from django.core.cache import cache
 from django.core.mail import send_mail
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from huey.contrib.djhuey import HUEY
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from names import catalog, jobs, services, tasks
 from names.accounts import record_consent
+from names.ai import rotation
 from names.ai.base import AIError, AIRateLimited, DescribedIdea, RespelledName
 from names.mail import QueuedEmailBackend
-from names.models import AICall, Board, CatalogName, Job, Name, NameAlias, Vote
+from names.models import AICall, Board, CatalogName, Job, Name, NameAlias, Profile, Vote
 
 pytestmark = pytest.mark.django_db
 HTMX = {"HTTP_HX_REQUEST": "true"}
@@ -343,13 +346,121 @@ def test_a_tapped_family_idea_cant_be_sent_twice_while_it_waits(board):
     assert 'hx-disabled-elt="this"' in html
 
 
-def test_a_failed_ai_search_says_why_in_place(board, client, monkeypatch):
+# When AI can't help
+
+def outage():
+    raise AIRateLimited("Busy.")
+
+
+def in_catalog(text, **fields):
+    defaults = {"text": text, "key": catalog.phonetic_key(text), "meaning": "A meaning", "status": "approved"}
+    return CatalogName.objects.create(**defaults | fields)
+
+
+def suggest(board, client):
+    return client.post(reverse("suggest", args=[board.parent_token]), **HTMX)
+
+
+@pytest.mark.parametrize("failure", [AIError("Bad answer."), AIRateLimited("Busy.")])
+def test_a_failed_ai_search_gives_catalogue_names_and_costs_nothing(board, client, monkeypatch, failure):
+    in_catalog("Oviya")
+
     def broken():
-        raise AIError("Try again in a minute.")
+        raise failure
 
     monkeypatch.setattr(services, "get_ai", broken)
-    response = client.post(reverse("suggest", args=[board.parent_token]), **HTMX)
-    assert "Try again in a minute." in response.content.decode()
+    html = suggest(board, client).content.decode()
+    assert "Oviya" in html and "close matches" in html
+    assert str(failure) not in html
+    assert not AICall.objects.exists()
+
+
+def test_close_matches_flex_on_origin_and_style_but_not_on_gender(user, client, monkeypatch):
+    board = Board.objects.create(brief={"gender": "girl", "origins": ["Tamil"], "style": "classic"})
+    board.members.add(user)
+    in_catalog("Oviya", gender="girl", origin="Sanskrit", style="modern")
+    in_catalog("Rohan", gender="boy", origin="Sanskrit", style="modern")
+    monkeypatch.setattr(services, "get_ai", outage)
+    html = suggest(board, client).content.decode()
+    assert "Oviya" in html and "Rohan" not in html
+
+
+def test_with_nothing_left_a_failed_search_says_so_without_an_error(board, client, monkeypatch):
+    monkeypatch.setattr(services, "get_ai", outage)
+    response = suggest(board, client)
+    assert response.status_code == 200 and b"Nothing more for now" in response.content
+
+
+def test_while_ai_rests_a_search_answers_at_once_and_starts_nothing(board, client, llm):
+    in_catalog("Oviya")
+    rotation.cool("gemini", 60)
+    with override_settings(GEMINI_MODELS=["gemini"]):
+        rotation.rest_if_all_cooling(["gemini"])
+    html = suggest(board, client).content.decode()
+    assert "Oviya" in html
+    assert not Job.objects.filter(kind="suggest").exists() and not AICall.objects.exists()
+
+
+def test_a_search_finding_nothing_new_still_gives_names(board, client, monkeypatch):
+    in_catalog("Oviya")
+    monkeypatch.setattr(services, "get_ai", lambda: SimpleNamespace(suggest=lambda request: []))
+    assert "Oviya" in suggest(board, client).content.decode()
+    assert AICall.objects.count() == 1  # AI did answer, so this one counts.
+
+
+def test_a_board_with_ai_off_can_still_ask_for_close_matches(board, user, client, llm):
+    in_catalog("Oviya")
+    Profile.objects.update_or_create(user=user, defaults={"ai_enabled": False})
+    assert b"Show close matches" in client.get(reverse("board", args=[board.parent_token])).content
+    assert "Oviya" in suggest(board, client).content.decode()
+    assert not AICall.objects.exists()
+
+
+def test_an_outage_doesnt_use_up_a_names_attempts(board, monkeypatch):
+    monkeypatch.setattr(services, "get_ai", outage)
+    add(board, "Zubin")
+    for _ in range(5):
+        tasks.enrich_batch()
+    entry = CatalogName.objects.get(text="Zubin")
+    assert entry.enrich_state == CatalogName.Enrich.PENDING and entry.enrich_attempts == 0
+
+
+def test_a_name_waiting_through_an_outage_gets_its_details_afterwards(board, monkeypatch, llm):
+    good = services.get_ai()
+    monkeypatch.setattr(services, "get_ai", outage)
+    card = add(board, "Zubin")
+    monkeypatch.setattr(services, "get_ai", lambda: good)
+    jobs.drain(jobs.LLM)
+    card.refresh_from_db()
+    assert card.meaning == "A meaning"
+
+
+def test_a_card_stops_waiting_when_details_are_overdue_and_can_still_be_heard(board, client, monkeypatch):
+    monkeypatch.setattr(services, "get_ai", outage)
+    card = add(board, "Zubin")
+    url = reverse("details", args=[board.parent_token, card.pk])
+    assert b"hx-trigger" in client.post(url, **HTMX).content
+    overdue = timezone.now() - catalog.DETAILS_PATIENCE - timedelta(seconds=1)
+    CatalogName.objects.filter(text="Zubin").update(updated_at=overdue)
+    html = client.post(url, **HTMX).content.decode()
+    assert "hx-trigger" not in html and "in our catalogue" in html and "data-say" in html
+
+
+def test_a_card_doesnt_wait_at_all_while_ai_rests(board, monkeypatch):
+    monkeypatch.setattr(services, "get_ai", outage)
+    card = add(board, "Zubin")
+    rotation.cool("gemini", 60)
+    rotation.rest_if_all_cooling(["gemini"])
+    assert services.describe_name(card) == services.Details.UNAVAILABLE
+
+
+def test_family_ideas_ask_again_after_an_outage_and_charge_nothing(board, monkeypatch):
+    in_catalog("Oviya")
+    monkeypatch.setattr(services, "get_ai", outage)
+    services.fetch_family_ideas(board)
+    assert not AICall.objects.exists()
+    board.refresh_from_db()
+    assert services.family_ideas_need_llm(board)
 
 
 # What the phone reads aloud

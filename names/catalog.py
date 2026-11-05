@@ -19,6 +19,7 @@ from rapidfuzz.distance import JaroWinkler
 from . import jobs
 from .ai.base import NameIdea
 from .ai.context import scrub
+from .ai.rotation import resting
 from .dedup import looks_like_name, phonetic_key, same_name
 from .models import CatalogName, Genre, Name, NameAlias
 
@@ -35,6 +36,7 @@ ALWAYS_OVERUSED = (
 _VOWELS = "aeiou"
 _MEANING_WORDS, _INSIGHT_WORDS = 12, 20
 RETRY_FAILED_AFTER = timedelta(hours=1)
+DETAILS_PATIENCE = timedelta(seconds=60)
 SAME_SPELLING = 0.7  # Below this, the LLM has changed the name rather than its spelling, so it isn't merged.
 _WORD_BREAK = re.compile(r"[\s,.;:!?()\"'।॥-]+")
 _MARKUP = re.compile(r"[*_`#]+")
@@ -136,6 +138,15 @@ def request_enrichment(text: str, key: str) -> bool:
 def being_described(key: str) -> bool:
     waiting = [CatalogName.Enrich.PENDING, CatalogName.Enrich.RUNNING]
     return CatalogName.objects.filter(key=key, enrich_state__in=waiting).exists()
+
+
+def worth_waiting_for(key: str) -> bool:
+    """Whether a card should keep saying details are coming. They can still arrive later, for the next look at it."""
+    if resting():
+        return False
+    waiting = [CatalogName.Enrich.PENDING, CatalogName.Enrich.RUNNING]
+    recent = timezone.now() - DETAILS_PATIENCE
+    return CatalogName.objects.filter(key=key, enrich_state__in=waiting, updated_at__gte=recent).exists()
 
 
 def queue_blank_entries(entries) -> None:
@@ -260,6 +271,12 @@ def ideas_for(brief: dict, exclude: set[str], limit: int = 8) -> list[CatalogNam
     themes = set(brief.get("themes", []))
     pool = _for_brief(brief).exclude(key__in=exclude).prefetch_related("genres").order_by("picks")[:200]
     return sorted(pool, key=lambda n: -len(themes & {genre.name for genre in n.genres.all()}))[:limit]
+
+
+def close_matches(brief: dict, exclude: set[str], limit: int = 8) -> list[CatalogName]:
+    """For when AI can't help. Style and origin are preferences a family can flex on, but gender stays as asked."""
+    wider = {key: value for key, value in brief.items() if key not in ("style", "origins")}
+    return ideas_for(brief, exclude, limit) or ideas_for(wider, exclude, limit)
 
 
 def genre_names() -> list[str]:

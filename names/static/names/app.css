@@ -620,3 +620,6 @@ span.htmx-request.htmx-indicator { display: inline; margin-left: .75rem; }
 .place-status.is-chosen { color: var(--keep-ink); font-weight: 600; }
 .place-status.is-chosen::before { content: "✓ "; }
 .place-credit { font-size: .75rem; }
+
+/* Once a search has answered, the offer to search further is out of date. */
+#ai-status:has(.hint) + #catalog-empty { display: none; }

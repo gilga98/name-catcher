@@ -7,8 +7,9 @@ from django.contrib.auth.base_user import AbstractBaseUser
 from django.db import transaction
 
 from . import accounts, catalog, soota
-from .ai.base import AIError, NameIdea, SuggestionRequest, get_ai
+from .ai.base import AIError, AIRateLimited, NameIdea, SuggestionRequest, get_ai
 from .ai.context import brief_for_llm
+from .ai.rotation import resting
 from .dedup import (
     ALMOST_CERTAINLY_SAME,
     closest,
@@ -252,15 +253,33 @@ def suggest_names(board: Board, more_like: str = "") -> list[Name]:
     return names
 
 
+def add_close_matches(board: Board) -> list[Name]:
+    """What AI would have been for, from the catalogue: free, instant, and there whether or not AI is."""
+    seen = {*board.names.values_list("key", flat=True), *_avoided(board)}
+    return add_from_catalog(board, [entry.pk for entry in catalog.close_matches(board.brief, seen)])
+
+
+def suggest_or_close_matches(board: Board, more_like: str = "", charge: int | None = None) -> tuple[list[Name], bool]:
+    """A parent asked for more names, so they get names. True means they came from the catalogue instead of AI."""
+    try:
+        names = suggest_names(board, more_like)
+    except AIError:
+        accounts.refund_ai_call(charge)
+        return add_close_matches(board), True
+    return (names, False) if names else (add_close_matches(board), True)
+
+
 def start_suggesting(board: Board, more_like: str = "") -> Job:
     """Checks what's quick here, so limits can be reported at once, and leaves the LLM call to the background."""
     if not accounts.ai_allowed(board):
         raise AIError("AI suggestions are switched off for this board in Settings.")
+    if resting():
+        raise AIRateLimited("AI is busy right now.")
     active = Job.objects.filter(board=board, kind="suggest", status__in=[Job.Status.QUEUED, Job.Status.RUNNING]).first()
     if active:
         return active
-    accounts.charge_ai_call(board, AICall.Kind.SUGGEST)
-    return enqueue(LLM, "suggest", {"board": board.pk, "more_like": more_like}, board=board)
+    charge = accounts.charge_ai_call(board, AICall.Kind.SUGGEST)
+    return enqueue(LLM, "suggest", {"board": board.pk, "more_like": more_like, "charge": charge.pk}, board=board)
 
 
 MIN_FAMILY_IDEAS = 4
@@ -293,6 +312,8 @@ def family_ideas_need_llm(board: Board) -> bool:
     """At most one LLM call per version of the brief, however many relatives open the link."""
     if board.family_ideas.get("stamp") == catalog.brief_stamp(board.brief) or not accounts.ai_allowed(board):
         return False
+    if resting():
+        return False
     seen = set(board.names.values_list("key", flat=True))
     return len(catalog.ideas_for(board.brief, seen, MIN_FAMILY_IDEAS)) < MIN_FAMILY_IDEAS
 
@@ -302,20 +323,24 @@ def fetch_family_ideas(board: Board, *, refresh: bool = False) -> None:
     on_screen = [idea["text"] for idea in _family_list(board)]
     shown = [*stored.get("shown", []), *on_screen] if refresh else []
     shown = shown[-MAX_SHOWN_IDEAS:]
+    charge, ask_again = None, False
     try:
-        accounts.charge_ai_call(board, AICall.Kind.SUGGEST)
+        charge = accounts.charge_ai_call(board, AICall.Kind.SUGGEST).pk
         # Relatives can see the catalogue's ideas, so the first ask can rule them out without hiding them afterwards.
         ideas = _ask_llm(_family_request(board, shown or on_screen))
         names = [{"text": idea.name[:60], "meaning": idea.meaning, "answer": idea.model_dump()} for idea in ideas]
-    except AIError:
+    except AIError as exc:
+        accounts.refund_ai_call(charge)
         names = []  # They can still type their own, so a failure here isn't worth an error.
+        ask_again = isinstance(exc, AIRateLimited)
     stamp = catalog.brief_stamp(board.brief)
     hidden = _hidden_from_family(board, shown)
     if refresh and all(phonetic_key(idea["text"]) in hidden for idea in names):
         # Nothing new to offer, so relatives keep the list they have rather than losing it.
         board.family_ideas = {**stored, "stamp": stamp, "refresh_failed": True}
     else:
-        board.family_ideas = {"stamp": stamp, "names": names, "shown": shown}
+        # An outage isn't an answer for this brief, so a relative opening the link later can still get one.
+        board.family_ideas = {"stamp": "" if ask_again else stamp, "names": names, "shown": shown}
     board.save(update_fields=["family_ideas"])
 
 
@@ -424,7 +449,9 @@ def describe_name(name: Name) -> str:
         return Details.READY
     if accounts.ai_allowed(name.board) and catalog.request_enrichment(name.text, name.key):
         name.refresh_from_db()
-        return Details.READY if name.respelling else Details.PENDING
+        if name.respelling:
+            return Details.READY
+        return Details.PENDING if catalog.worth_waiting_for(name.key) else Details.UNAVAILABLE
     return Details.UNAVAILABLE
 
 
@@ -446,7 +473,7 @@ def preview_name(board: Board, text: str, *, start: bool, allow_ai: bool = True)
     if entry:
         _apply_details(name, _from_catalog(board, entry))
         return name, Details.READY
-    return name, Details.PENDING if catalog.being_described(key) else Details.UNAVAILABLE
+    return name, Details.PENDING if catalog.worth_waiting_for(key) else Details.UNAVAILABLE
 
 
 def prepare_names(board: Board, names: list[Name]) -> None:

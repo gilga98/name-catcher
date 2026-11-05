@@ -51,12 +51,17 @@ def family_refresh_allowed(board: Board) -> bool:
     return ai_allowed(board) and owner is not None and ai_calls_left(owner) > settings.AI_CALLS_KEPT_FOR_PARENTS
 
 
-def charge_ai_call(board: Board, kind: str) -> None:
+def charge_ai_call(board: Board, kind: str) -> AICall:
     """Family members have no account, so their requests count against the parent who owns the board."""
     owner = board.members.order_by("pk").first()
     if owner is not None and ai_calls_left(owner) <= 0:
         raise AIQuotaReached("This month's AI requests are used up. Names from our catalogue still work.")
-    AICall.objects.create(user=owner, kind=kind)
+    return AICall.objects.create(user=owner, kind=kind)
+
+
+def refund_ai_call(pk: int | None) -> None:
+    """A family pays for answers, not for our outages."""
+    AICall.objects.filter(pk=pk).delete()
 
 
 def export_data(user: AbstractBaseUser) -> dict:

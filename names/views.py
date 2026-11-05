@@ -16,6 +16,9 @@ from django_ratelimit.decorators import ratelimit
 from django_ratelimit.exceptions import Ratelimited
 
 from . import accounts, catalog, places, services
+from .accounts import AIQuotaReached
+from .ai.base import AIError
+from .ai.rotation import resting
 from .analytics import allow_web_analytics
 from .forms import GENDERS, STYLES, UNIQUENESS, AddNameForm, BirthStarForm, BriefForm
 from .jobs import LLM, SOOTA, nudge
@@ -26,6 +29,8 @@ PENDING_BRIEF = "pending_brief"
 NOT_A_NAME = "Enter just the name, up to 28 letters."
 NOT_YOUR_NAME = "Enter just your name, without numbers or symbols."
 DIFFERENT_NAME = "That looks like a different name. Add it on its own."
+CLOSE_MATCHES = "Here are close matches from our catalogue."
+NOTHING_CLOSER = "Nothing more for now. Try widening your preferences."
 
 
 def rate_limited(request: HttpRequest, exception: Exception) -> HttpResponse:
@@ -328,12 +333,17 @@ def suggest_from_catalog(request: HttpRequest, token: str) -> HttpResponse:
     return render(request, "names/partials/review_cards.html", _context(request, queue=names))
 
 
+def _catalog_note(names) -> str:
+    return CLOSE_MATCHES if names else NOTHING_CLOSER
+
+
 def _ai_status(request: HttpRequest, job: Job) -> HttpResponse:
     """Parents keep swiping while AI works. This small element polls, then adds its cards to the deck."""
     if job.status == Job.Status.DONE:
         names = request.board.names.filter(pk__in=job.result.get("names", []))
         where = "afterbegin" if job.payload.get("more_like") else "beforeend"
-        context = _context(request, queue=names, finished=True, where=where)
+        note = _catalog_note(names) if job.result.get("from_catalog") else ""
+        context = _context(request, queue=names, finished=True, where=where, note=note)
     elif job.status == Job.Status.FAILED:
         context = _context(request, error=job.result.get("error"), finished=True)
     else:
@@ -342,11 +352,26 @@ def _ai_status(request: HttpRequest, job: Job) -> HttpResponse:
     return render(request, "names/partials/ai_status.html", context)
 
 
+def _ask_ai_or_catalog(request: HttpRequest, more_like: str = "") -> HttpResponse:
+    """Whenever AI can't take this, the same tap adds catalogue names at once, so a parent always gets something."""
+    _spend_ai_budget(request)
+    note = ""
+    try:
+        return _ai_status(request, services.start_suggesting(request.board, more_like=more_like))
+    except AIQuotaReached as exc:
+        note = str(exc)  # The one reason a parent can do something about.
+    except AIError:
+        pass
+    names = services.add_close_matches(request.board)
+    where = "afterbegin" if more_like else "beforeend"
+    context = _context(request, queue=names, finished=True, where=where, note=note or _catalog_note(names))
+    return render(request, "names/partials/ai_status.html", context)
+
+
 @require_POST
 @with_board(parent_only=True)
 def suggest(request: HttpRequest, token: str) -> HttpResponse:
-    _spend_ai_budget(request)
-    return _ai_status(request, services.start_suggesting(request.board))
+    return _ask_ai_or_catalog(request)
 
 
 @require_GET
@@ -378,8 +403,7 @@ def new_cards(request: HttpRequest, token: str) -> HttpResponse:
 @require_POST
 @with_board(parent_only=True)
 def more_like_name(request: HttpRequest, token: str, pk: int) -> HttpResponse:
-    _spend_ai_budget(request)
-    return _ai_status(request, services.start_suggesting(request.board, more_like=_name(request, pk).text))
+    return _ask_ai_or_catalog(request, more_like=_name(request, pk).text)
 
 
 @require_POST
@@ -422,7 +446,7 @@ def _may_spend_ai(request: HttpRequest) -> bool:
 
 
 def _may_refresh_family_ideas(request: HttpRequest) -> bool:
-    if not accounts.family_refresh_allowed(request.board):
+    if resting() or not accounts.family_refresh_allowed(request.board):
         return False
     rate = settings.FAMILY_REFRESH_RATE
     limited = is_ratelimited(request, group="family-refresh", key=_board_token, rate=rate, increment=True)
